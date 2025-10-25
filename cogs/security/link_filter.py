@@ -1,10 +1,10 @@
 # cogs/security/link_filter.py
 import discord
 from discord.ext import commands
-import config
+import core_config as config
 import re
 from utils.logging import send_log
-from config.filters import est_url_suspecte
+from config.filters import est_url_suspecte, est_contenu_suspect
 
 URL_REGEX = re.compile(r"https?://[^\s]+")
 

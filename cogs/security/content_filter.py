@@ -1,9 +1,9 @@
 # cogs/security/content_filter.py
 import discord
 from discord.ext import commands
-from config.filters import est_contenu_suspect
+from config.filters import est_url_suspecte, est_contenu_suspect
 from utils.logging import send_log
-import config
+import core_config as config
 
 class ContentFilterCog(commands.Cog):
     def __init__(self, bot):

@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-import config
+import core_config as config
 
 class ModerationCog(commands.Cog):
     @discord.app_commands.command(name="audit", description="Analyse la sécurité du serveur")

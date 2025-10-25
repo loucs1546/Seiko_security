@@ -1,7 +1,7 @@
 # cogs/log_setup.py
 import discord
 from discord.ext import commands
-import config
+import core_config as config
 
 class LogSetupCog(commands.Cog):
     def __init__(self, bot):
