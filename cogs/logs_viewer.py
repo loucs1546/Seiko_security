@@ -1,11 +1,19 @@
+# cogs/logs_viewer.py
 import discord
 from discord.ext import commands
 import config
 from utils.db import supabase_select
 
 class LogsViewerCog(commands.Cog):
-    @discord.app_commands.command(name="showdata", description="Affiche les derniers logs de sécurité enregistrés")
-    async def showdata(self, interaction: discord.Interaction):
+    def __init__(self, bot):
+        self.bot = bot
+        self.showdata_command = discord.app_commands.Command(
+            name="showdata",
+            description="Affiche les derniers logs de sécurité enregistrés",
+            callback=self.showdata_callback
+        )
+
+    async def showdata_callback(self, interaction: discord.Interaction):
         if not interaction.user.guild_permissions.administrator:
             await interaction.response.send_message("❌ Réservé aux administrateurs.", ephemeral=True)
             return
@@ -31,22 +39,23 @@ class LogsViewerCog(commands.Cog):
                     if "content" in details:
                         detail_str = f" « {details['content'][:50]}{'…' if len(details['content']) > 50 else ''} »"
                     elif "url" in details:
-                        detail_str = f" [URL : {details['url'][:40]}{'…' if len(details['url']) > 40 else ''}]"
-                    elif "join_count" in details:
-                        detail_str = f" ({details['join_count']} membres)"
-
+                        detail_str = f" [URL]"
                 lines.append(f"**[{timestamp}]** {user_mention} → `{action}`{detail_str}")
 
             content = "\n".join(lines)
             if len(content) > 1900:
-                content = content[:1900] + "\n… (tronqué)"
-
-            await interaction.followup.send(
-                f"📜 **Derniers logs de sécurité** (total : {len(logs)}) :\n\n{content}",
-                ephemeral=True
-            )
+                content = content[:1900] + "\n…"
+            await interaction.followup.send(f"📜 **Logs** ({len(logs)} total) :\n\n{content}", ephemeral=True)
         except Exception as e:
-            await interaction.followup.send(f"❌ Erreur : `{str(e)}`", ephemeral=True)
+            await interaction.followup.send(f"❌ Erreur : `{e}`", ephemeral=True)
+
+    async def cog_load(self):
+        guild = discord.Object(id=config.GUILD_ID)
+        self.bot.tree.add_command(self.showdata_command, guild=guild)
+
+    async def cog_unload(self):
+        guild = discord.Object(id=config.GUILD_ID)
+        self.bot.tree.remove_command("showdata", guild=guild)
 
 async def setup(bot):
     await bot.add_cog(LogsViewerCog(bot))
