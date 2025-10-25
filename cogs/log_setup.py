@@ -1,3 +1,4 @@
+# cogs/log_setup.py
 import discord
 from discord.ext import commands
 import config
@@ -6,46 +7,45 @@ class LogSetupCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @discord.app_commands.command(name="create-categorie-log", description="Crée une catégorie complète de salons de logs")
+    @discord.app_commands.command(
+        name="create-categorie-log",
+        description="Crée une catégorie complète de salons de surveillance"
+    )
     @discord.app_commands.checks.has_permissions(administrator=True)
     async def create_log_category(self, interaction: discord.Interaction):
         guild = interaction.guild
 
+        # Vérifie si une catégorie de logs existe déjà
         for category in guild.categories:
-            if "log" in category.name.lower():
+            if "log" in category.name.lower() or "surveillance" in category.name.lower():
                 await interaction.response.send_message(
-                    f"❌ Une catégorie de logs existe déjà : **{category.name}**", 
+                    f"❌ Une catégorie de surveillance existe déjà : **{category.name}**",
                     ephemeral=True
                 )
                 return
 
+        # Crée la catégorie
         category = await guild.create_category(
-            name="🔐・Logs Sécurité",
+            name="🔐・Surveillance",
             overwrites={
                 guild.default_role: discord.PermissionOverwrite(read_messages=False),
                 guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
             }
         )
 
-        names = ["📜・messages", "🎤・vocal", "🎫・tickets", "🛠️・commandes", "👑・rôles", "📛・profil", "🔗・liens", "🚨・menaces"]
-        channels = {}
-        for name in names:
-            ch = await guild.create_text_channel(name=name, category=category)
-            key = name.split("・")[1]
-            if key == "messages": channels["messages"] = ch.id
-            elif key == "vocal": channels["vocal"] = ch.id
-            elif key == "tickets": channels["tickets"] = ch.id
-            elif key == "commandes": channels["commands"] = ch.id
-            elif key == "rôles": channels["roles"] = ch.id
-            elif key == "profil": channels["profile"] = ch.id
-            elif key == "liens": channels["links"] = ch.id
-            elif key == "menaces": channels["threats"] = ch.id
+        # Liste des salons à créer
+        salon_configs = [
+            ("📜・messages", "messages"),
+            ("🎤・vocal", "vocal"),
+            ("🎫・tickets", "tickets"),
+            ("🛠️・commandes", "commands"),
+            ("👑・rôles", "roles"),
+            ("📛・profil", "profile"),
+            ("🔍・contenu", "content"),
+            ("🚨・alertes", "alerts")
+        ]
 
-        config.LOG_CHANNELS = channels
-        await interaction.response.send_message(
-            f"✅ Catégorie **{category.name}** créée avec {len(names)} salons !",
-            ephemeral=True
-        )
-
-async def setup(bot):
-    await bot.add_cog(LogSetupCog(bot))
+        # Créer les salons et enregistrer les ID
+        channel_ids = {}
+        for name, key in salon_configs:
+            channel = await guild.create_text

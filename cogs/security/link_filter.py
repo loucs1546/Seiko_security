@@ -1,25 +1,12 @@
+# cogs/security/link_filter.py
 import discord
 from discord.ext import commands
 import config
 import re
 from utils.logging import send_log
-
-NSFW_KEYWORDS = {
-    "porn", "sex", "xxx", "nude", "nsfw", "adult", "cam", "onlyfans",
-    "pedo", "child", "lolita", "jailbait", "cp", "hentai", "furry", "rule34",
-    "gay", "lesbian", "trans", "shemale", "cock", "pussy", "ass", "boobs"
-}
+from config.filters import est_url_suspecte
 
 URL_REGEX = re.compile(r"https?://[^\s]+")
-
-def is_suspicious_url(url: str) -> bool:
-    url_lower = url.lower()
-    for word in NSFW_KEYWORDS:
-        if word in url_lower:
-            return True
-    if "discord.gg/" in url_lower or "discord.com/invite/" in url_lower:
-        return True
-    return False
 
 class LinkFilterCog(commands.Cog):
     def __init__(self, bot):
@@ -33,21 +20,21 @@ class LinkFilterCog(commands.Cog):
         urls = URL_REGEX.findall(message.content)
         for url in urls:
             embed = discord.Embed(
-                title="🔗 URL détectée",
+                title="🔗 Lien détecté",
                 description=f"Par {message.author.mention} dans {message.channel.mention}",
-                color=0xff6600,
+                color=0x0099ff,
                 timestamp=discord.utils.utcnow()
             )
             embed.add_field(name="URL", value=url[:1020])
 
-            if is_suspicious_url(url):
-                embed.color = 0xff0000
-                embed.title = "⚠️ URL SUSPECTE – POSSIBLEMENT NSFW/PEGI18"
+            if est_url_suspecte(url):
+                embed.color = 0xff6600
+                embed.title = "⚠️ Lien suspect"
                 # Optionnel : supprimer le message
                 # await message.delete()
-                # await message.channel.send(f"{message.author.mention}, lien interdit.", delete_after=5)
+                # await message.channel.send(f"{message.author.mention}, les liens de ce type ne sont pas autorisés.", delete_after=5)
 
-            await send_log(self.bot, "links", embed)
+            await send_log(self.bot, "content", embed)
 
 async def setup(bot):
     await bot.add_cog(LinkFilterCog(bot))
