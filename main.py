@@ -22,7 +22,8 @@ async def on_ready():
         "cogs.security.antispam",
         "cogs.security.link_filter",
         "cogs.moderation",
-        "cogs.tickets"
+        "cogs.tickets",
+        "cogs.logs_viewer"
     ]
     for cog in cog_paths:
         try:
