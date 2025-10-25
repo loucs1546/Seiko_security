@@ -40,7 +40,6 @@ class LoggingCog(commands.Cog):
         if before.guild.id != config.GUILD_ID:
             return
 
-        # Changement de pseudo
         if before.nick != after.nick:
             embed = discord.Embed(
                 title="📛 Pseudo modifié",
@@ -52,7 +51,6 @@ class LoggingCog(commands.Cog):
             embed.add_field(name="Après", value=after.nick or "Aucun", inline=True)
             await send_log(self.bot, "profile", embed)
 
-        # Changement d'avatar
         if before.avatar != after.avatar:
             embed = discord.Embed(
                 title="🖼️ Avatar modifié",
@@ -63,7 +61,6 @@ class LoggingCog(commands.Cog):
             embed.set_thumbnail(url=after.display_avatar.url)
             await send_log(self.bot, "profile", embed)
 
-        # Changement de rôles
         before_roles = set(before.roles)
         after_roles = set(after.roles)
         if before_roles != after_roles:

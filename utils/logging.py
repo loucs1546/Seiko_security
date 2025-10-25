@@ -10,4 +10,4 @@ async def send_log(bot, channel_key: str, embed: discord.Embed):
         try:
             await channel.send(embed=embed)
         except Exception:
-            pass
+            pass  # Échec silencieux si salon supprimé

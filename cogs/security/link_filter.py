@@ -7,7 +7,7 @@ from utils.logging import send_log
 NSFW_KEYWORDS = {
     "porn", "sex", "xxx", "nude", "nsfw", "adult", "cam", "onlyfans",
     "pedo", "child", "lolita", "jailbait", "cp", "hentai", "furry", "rule34",
-    "gay", "lesbian", "trans", " Shemale", "cock", "pussy", "ass", "boobs"
+    "gay", "lesbian", "trans", "shemale", "cock", "pussy", "ass", "boobs"
 }
 
 URL_REGEX = re.compile(r"https?://[^\s]+")

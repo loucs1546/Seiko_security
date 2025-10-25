@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
 import config
-from utils.db import supabase_insert
+from utils.logging import send_log
 from collections import defaultdict
 import time
 
@@ -21,12 +21,14 @@ class AntiSpamCog(commands.Cog):
         if len(self.user_messages[uid]) > 5:
             await message.delete()
             await message.channel.send(f"{message.author.mention}, ne spammez pas.", delete_after=5)
-            await supabase_insert("logs", {
-                "guild_id": config.GUILD_ID,
-                "user_id": uid,
-                "action": "spam_blocked",
-                "details": {"content": message.content[:100]}
-            })
+            embed = discord.Embed(
+                title="🚫 SPAM BLOQUÉ",
+                description=f"Par {message.author.mention}",
+                color=0xff0000,
+                timestamp=discord.utils.utcnow()
+            )
+            embed.add_field(name="Contenu", value=message.content[:1020])
+            await send_log(self.bot, "threats", embed)
 
 async def setup(bot):
     await bot.add_cog(AntiSpamCog(bot))

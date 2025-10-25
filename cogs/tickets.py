@@ -1,6 +1,5 @@
 import discord
 from discord.ext import commands
-import config
 
 class TicketCog(commands.Cog):
     @discord.app_commands.command(name="active", description="Active les webhooks de tickets")
