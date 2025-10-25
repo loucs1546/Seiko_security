@@ -48,4 +48,14 @@ class LogSetupCog(commands.Cog):
         # Créer les salons et enregistrer les ID
         channel_ids = {}
         for name, key in salon_configs:
-            channel = await guild.create_text
+            channel = await guild.create_text_channel(name=name, category=category)
+            channel_ids[key] = channel.id
+
+        config.LOG_CHANNELS = channel_ids
+        await interaction.response.send_message(
+            f"✅ Catégorie **{category.name}** créée avec {len(salon_configs)} salons de surveillance !",
+            ephemeral=True
+        )
+
+async def setup(bot):
+    await bot.add_cog(LogSetupCog(bot))

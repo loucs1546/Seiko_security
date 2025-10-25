@@ -19,7 +19,8 @@ async def on_ready():
         "cogs.security.link_filter",
         "cogs.moderation",
         "cogs.tickets",
-        "cogs.log_setup"
+        "cogs.log_setup",
+        "config.filters",
     ]
 
     for cog in cog_paths:
