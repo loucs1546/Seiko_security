@@ -28,6 +28,9 @@ class ContentFilterCog(commands.Cog):
             embed.add_field(name="Raison", value="Contenu suspect détecté", inline=False)
             embed.add_field(name="Extrait", value=message.content[:100], inline=False)
             await send_log(self.bot, "content", embed)
+async def setup(bot):
+    print("✅ Filtre de contenu activé")
+    await bot.add_cog(ContentFilterCog(bot))
 
 async def setup(bot):
     await bot.add_cog(ContentFilterCog(bot))

@@ -13,10 +13,10 @@ async def on_ready():
     print(f"✅ {bot.user} est en ligne !")
     cog_paths = [
         "cogs.logging",
+        "cogs.security.content_filter",
         "cogs.security.antiraid",
         "cogs.security.antispam",
         "cogs.security.link_filter",
-        "cogs.security.content_filter",  # ← Cette ligne est-elle présente ?
         "cogs.moderation",
         "cogs.tickets",
         "cogs.log_setup"
