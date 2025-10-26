@@ -40,10 +40,5 @@ async def on_ready():
     except Exception as e:
         print(f"❌ Erreur de synchronisation : {e}")
 
-# === COMMANDE PING ===
-@bot.tree.command(name="ping", description="Vérifie si le bot est en ligne")
-async def ping(interaction: discord.Interaction):
-    latency = round(bot.latency * 1000)
-    await interaction.response.send_message(f"🏓 Pong ! Latence : **{latency} ms**", ephemeral=True)
 
 bot.run(config.DISCORD_TOKEN)
