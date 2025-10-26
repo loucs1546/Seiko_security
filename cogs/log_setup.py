@@ -7,24 +7,20 @@ class LogSetupCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @discord.app_commands.command(
-        name="create-categorie-log",
-        description="Crée une catégorie complète de salons de surveillance"
-    )
-    @discord.app_commands.checks.has_permissions(administrator=True)
-    async def create_log_category(self, interaction: discord.Interaction):
-        guild = interaction.guild
+    async def create_log_category_callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("❌ Réservé aux administrateurs.", ephemeral=True)
+            return
 
-        # Vérifie si une catégorie de logs existe déjà
+        guild = interaction.guild
         for category in guild.categories:
             if "log" in category.name.lower() or "surveillance" in category.name.lower():
                 await interaction.response.send_message(
-                    f"❌ Une catégorie de surveillance existe déjà : **{category.name}**",
+                    f"❌ Une catégorie de logs existe déjà : **{category.name}**",
                     ephemeral=True
                 )
                 return
 
-        # Crée la catégorie
         category = await guild.create_category(
             name="🔐・Surveillance",
             overwrites={
@@ -33,7 +29,6 @@ class LogSetupCog(commands.Cog):
             }
         )
 
-        # Liste des salons à créer
         salon_configs = [
             ("📜・messages", "messages"),
             ("🎤・vocal", "vocal"),
@@ -45,7 +40,6 @@ class LogSetupCog(commands.Cog):
             ("🚨・alertes", "alerts")
         ]
 
-        # Créer les salons et enregistrer les ID
         channel_ids = {}
         for name, key in salon_configs:
             channel = await guild.create_text_channel(name=name, category=category)
@@ -53,9 +47,18 @@ class LogSetupCog(commands.Cog):
 
         config.LOG_CHANNELS = channel_ids
         await interaction.response.send_message(
-            f"✅ Catégorie **{category.name}** créée avec {len(salon_configs)} salons de surveillance !",
+            f"✅ Catégorie **{category.name}** créée avec {len(salon_configs)} salons !",
             ephemeral=True
         )
+
+    async def cog_load(self):
+        guild = discord.Object(id=config.GUILD_ID)
+        command = discord.app_commands.Command(
+            name="create-categorie-log",
+            description="Crée une catégorie complète de salons de surveillance",
+            callback=self.create_log_category_callback
+        )
+        self.bot.tree.add_command(command, guild=guild)
 
 async def setup(bot):
     await bot.add_cog(LogSetupCog(bot))

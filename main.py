@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-import core_config as config  # ← changé ici
+import core_config as config
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -11,22 +11,18 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 @bot.event
 async def on_ready():
     print(f"✅ {bot.user} est en ligne !")
+    
     cog_paths = [
         "cogs.logging",
         "cogs.security.antiraid",
         "cogs.security.antispam",
-        "cogs.security.link_filter",      # ← Doit être là
-        "cogs.security.content_filter",   # ← Doit être là
+        "cogs.security.link_filter",
+        "cogs.security.content_filter",
         "cogs.moderation",
         "cogs.tickets",
-        "cogs.log_setup"                  # ← Pour la commande
+        "cogs.log_setup"
     ]
-    # DEBUG : force le chargement du filtre
-    try:
-        await bot.load_extension("cogs.security.content_filter")
-        print("✅ content_filter forcé")
-    except Exception as e:
-        print("❌ Erreur content_filter :", e)
+    
     for cog in cog_paths:
         try:
             await bot.load_extension(cog)
@@ -34,10 +30,12 @@ async def on_ready():
         except Exception as e:
             print(f"❌ Erreur au chargement de {cog} : {e}")
 
+    # Synchronisation explicite
     guild = discord.Object(id=config.GUILD_ID)
-    await bot.tree.sync(guild=guild)
-    print("🔁 Commandes slash synchronisées.")
-
-
+    try:
+        synced = await bot.tree.sync(guild=guild)
+        print(f"🔁 {len(synced)} commandes synchronisées : {[c.name for c in synced]}")
+    except Exception as e:
+        print(f"❌ Erreur de synchronisation : {e}")
 
 bot.run(config.DISCORD_TOKEN)

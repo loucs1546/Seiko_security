@@ -4,7 +4,7 @@ from discord.ext import commands
 import core_config as config
 import re
 from utils.logging import send_log
-from config.filters import est_url_suspecte, est_contenu_suspect
+from config.filters import est_url_suspecte
 
 URL_REGEX = re.compile(r"https?://[^\s]+")
 
@@ -30,9 +30,6 @@ class LinkFilterCog(commands.Cog):
             if est_url_suspecte(url):
                 embed.color = 0xff6600
                 embed.title = "⚠️ Lien suspect"
-                # Optionnel : supprimer le message
-                # await message.delete()
-                # await message.channel.send(f"{message.author.mention}, les liens de ce type ne sont pas autorisés.", delete_after=5)
 
             await send_log(self.bot, "content", embed)
 
