@@ -25,7 +25,7 @@ class LoggingCog(commands.Cog):
         if message.attachments:
             urls = "\n".join(a.url for a in message.attachments[:3])
             embed.add_field(name="📎 Pièces jointes", value=urls, inline=False)
-        await send_log(self.bot, message.guild.id, "messages", embed)
+        await send_log(self.bot, "messages", embed)
 
     @commands.Cog.listener()
     async def on_message_edit(self, before, after):
@@ -39,7 +39,7 @@ class LoggingCog(commands.Cog):
         )
         embed.add_field(name="Avant", value=before.content[:1020] or "*(vide)*", inline=False)
         embed.add_field(name="Après", value=after.content[:1020] or "*(vide)*", inline=False)
-        await send_log(self.bot, after.guild.id, "messages", embed)
+        await send_log(self.bot, "messages", embed)
 
     @commands.Cog.listener()
     async def on_message_delete(self, message):
@@ -48,8 +48,8 @@ class LoggingCog(commands.Cog):
 
         deleter = "Inconnu"
         try:
-            async for entry in message.guild.audit_logs(limit=5, action=discord.AuditLogAction.message_delete):
-                if entry.target.id == message.author.id and abs((entry.created_at - discord.utils.utcnow()).total_seconds()) < 10:
+            async for entry in message.guild.audit_logs(limit=10, action=discord.AuditLogAction.message_delete):
+                if entry.target.id == message.author.id and abs((entry.created_at - discord.utils.utcnow()).total_seconds()) < 15:
                     deleter = entry.user
                     break
         except:
@@ -65,11 +65,11 @@ class LoggingCog(commands.Cog):
         )
         if message.content:
             embed.add_field(name="Contenu", value=message.content[:1020], inline=False)
-        await send_log(self.bot, message.guild.id, "messages", embed)
+        await send_log(self.bot, "messages", embed)
 
     @commands.Cog.listener()
     async def on_member_update(self, before, after):
-        if before.guild.id != after.guild.id:
+        if before.guild.id != config.GUILD_ID:
             return
 
         if before.nick != after.nick:
@@ -91,7 +91,7 @@ class LoggingCog(commands.Cog):
             )
             embed.add_field(name="Avant", value=old_nick, inline=True)
             embed.add_field(name="Après", value=new_nick, inline=True)
-            await send_log(self.bot, after.guild.id, "profile", embed)
+            await send_log(self.bot, "profile", embed)
 
         before_roles = set(before.roles)
         after_roles = set(after.roles)
@@ -116,11 +116,11 @@ class LoggingCog(commands.Cog):
                     color=0xffaa00,
                     timestamp=discord.utils.utcnow()
                 )
-                await send_log(self.bot, after.guild.id, "roles", embed)
+                await send_log(self.bot, "roles", embed)
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
-        if member.guild.id != before.guild.id:
+        if member.guild.id != config.GUILD_ID:
             return
 
         embed = None
@@ -186,11 +186,11 @@ class LoggingCog(commands.Cog):
             )
 
         if embed:
-            await send_log(self.bot, member.guild.id, "vocal", embed)
+            await send_log(self.bot, "vocal", embed)
 
     @commands.Cog.listener()
     async def on_interaction(self, interaction: discord.Interaction):
-        if not interaction.guild or interaction.type != discord.InteractionType.application_command:
+        if not interaction.guild or interaction.guild.id != config.GUILD_ID or interaction.type != discord.InteractionType.application_command:
             return
 
         args = []
@@ -212,7 +212,7 @@ class LoggingCog(commands.Cog):
             color=0x2ecc71,
             timestamp=discord.utils.utcnow()
         )
-        await send_log(self.bot, interaction.guild.id, "commands", embed)
+        await send_log(self.bot, "commands", embed)
 
 async def setup(bot):
     await bot.add_cog(LoggingCog(bot))

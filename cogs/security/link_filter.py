@@ -26,7 +26,6 @@ class LinkFilterCog(commands.Cog):
         except:
             pass
 
-        # Message éphémère dans le salon (pas de MP)
         try:
             await message.channel.send(
                 f"{message.author.mention}, votre message contient un lien suspect et a été supprimé.",

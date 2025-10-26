@@ -2,7 +2,7 @@
 import discord
 import core_config as config
 
-async def send_log(bot, guild_id: int, channel_key: str, embed: discord.Embed):
+async def send_log(bot, channel_key: str, embed: discord.Embed):
     channel_id = config.LOG_CHANNELS.get(channel_key)
     if not channel_id:
         return

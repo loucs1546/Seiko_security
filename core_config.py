@@ -5,5 +5,5 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-GUILD_ID = int(os.getenv("GUILD_ID"))  # ← Tu le gardes pour la sync rapide
+GUILD_ID = int(os.getenv("GUILD_ID"))  # ← utilisé pour filtrer les événements ET la sync
 LOG_CHANNELS = {}
