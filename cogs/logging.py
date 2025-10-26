@@ -12,8 +12,7 @@ class LoggingCog(commands.Cog):
     async def on_message(self, message):
         if (
             not message.guild or
-            message.guild.id != config.GUILD_ID or
-            message.author.id == self.bot.user.id  # ← Ignore les messages du bot
+            message.author.id == self.bot.user.id
         ):
             return
 
@@ -26,11 +25,11 @@ class LoggingCog(commands.Cog):
         if message.attachments:
             urls = "\n".join(a.url for a in message.attachments[:3])
             embed.add_field(name="📎 Pièces jointes", value=urls, inline=False)
-        await send_log(self.bot, "messages", embed)
+        await send_log(self.bot, message.guild.id, "messages", embed)
 
     @commands.Cog.listener()
     async def on_message_edit(self, before, after):
-        if not after.guild or after.guild.id != config.GUILD_ID or after.author.bot or before.content == after.content:
+        if not after.guild or after.author.bot or before.content == after.content:
             return
         embed = discord.Embed(
             title="✏️ Message édité",
@@ -40,25 +39,37 @@ class LoggingCog(commands.Cog):
         )
         embed.add_field(name="Avant", value=before.content[:1020] or "*(vide)*", inline=False)
         embed.add_field(name="Après", value=after.content[:1020] or "*(vide)*", inline=False)
-        await send_log(self.bot, "messages", embed)
+        await send_log(self.bot, after.guild.id, "messages", embed)
 
     @commands.Cog.listener()
     async def on_message_delete(self, message):
-        if not message.guild or message.guild.id != config.GUILD_ID or message.author.bot:
+        if not message.guild or message.author.bot:
             return
+
+        deleter = "Inconnu"
+        try:
+            async for entry in message.guild.audit_logs(limit=5, action=discord.AuditLogAction.message_delete):
+                if entry.target.id == message.author.id and abs((entry.created_at - discord.utils.utcnow()).total_seconds()) < 10:
+                    deleter = entry.user
+                    break
+        except:
+            pass
+
         embed = discord.Embed(
             title="🗑️ Message supprimé",
-            description=f"Par {message.author.mention} dans {message.channel.mention}",
+            description=f"**Auteur** : {message.author.mention}\n"
+                        f"**Salon** : {message.channel.mention}\n"
+                        f"**Supprimé par** : {deleter}",
             color=0xff8800,
             timestamp=discord.utils.utcnow()
         )
         if message.content:
             embed.add_field(name="Contenu", value=message.content[:1020], inline=False)
-        await send_log(self.bot, "messages", embed)
+        await send_log(self.bot, message.guild.id, "messages", embed)
 
     @commands.Cog.listener()
     async def on_member_update(self, before, after):
-        if before.guild.id != config.GUILD_ID:
+        if before.guild.id != after.guild.id:
             return
 
         if before.nick != after.nick:
@@ -80,7 +91,7 @@ class LoggingCog(commands.Cog):
             )
             embed.add_field(name="Avant", value=old_nick, inline=True)
             embed.add_field(name="Après", value=new_nick, inline=True)
-            await send_log(self.bot, "profile", embed)
+            await send_log(self.bot, after.guild.id, "profile", embed)
 
         before_roles = set(before.roles)
         after_roles = set(after.roles)
@@ -105,11 +116,11 @@ class LoggingCog(commands.Cog):
                     color=0xffaa00,
                     timestamp=discord.utils.utcnow()
                 )
-                await send_log(self.bot, "roles", embed)
+                await send_log(self.bot, after.guild.id, "roles", embed)
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
-        if member.guild.id != config.GUILD_ID:
+        if member.guild.id != before.guild.id:
             return
 
         embed = None
@@ -145,8 +156,7 @@ class LoggingCog(commands.Cog):
                 pass
             embed = discord.Embed(
                 title="🎤 Déplacement vocal",
-                description=f"{member.mention} : {before.channel.mention} → {after.channel.mention}" +
-                            (f"\n**Modérateur** : {moderator}" if moderator != "Inconnu" else ""),
+                description=f"{member.mention} : {before.channel.mention} → {after.channel.mention}\n**Modérateur** : {moderator}",
                 color=0xffff00,
                 timestamp=discord.utils.utcnow()
             )
@@ -176,20 +186,33 @@ class LoggingCog(commands.Cog):
             )
 
         if embed:
-            await send_log(self.bot, "vocal", embed)
+            await send_log(self.bot, member.guild.id, "vocal", embed)
 
     @commands.Cog.listener()
     async def on_interaction(self, interaction: discord.Interaction):
-        if not interaction.guild or interaction.guild.id != config.GUILD_ID:
+        if not interaction.guild or interaction.type != discord.InteractionType.application_command:
             return
-        if interaction.type == discord.InteractionType.application_command:
-            embed = discord.Embed(
-                title="🛠️ Commande slash détectée",
-                description=f"**Utilisateur** : {interaction.user.mention}\n**Commande** : `/{interaction.command.name}`",
-                color=0x2ecc71,
-                timestamp=discord.utils.utcnow()
-            )
-            await send_log(self.bot, "commands", embed)
+
+        args = []
+        if interaction.data.get("options"):
+            for opt in interaction.data["options"]:
+                if opt["type"] in (6, 7, 8):  # User, Channel, Role
+                    args.append(f"{opt['name']}: <@{opt['value']}>")
+                else:
+                    args.append(f"{opt['name']}: {opt['value']}")
+
+        full_command = f"/{interaction.command.name}"
+        if args:
+            full_command += " " + " ".join(args)
+
+        embed = discord.Embed(
+            title="🛠️ Commande slash détectée",
+            description=f"**Utilisateur** : {interaction.user.mention}\n"
+                        f"**Commande complète** :\n```\n{full_command}\n```",
+            color=0x2ecc71,
+            timestamp=discord.utils.utcnow()
+        )
+        await send_log(self.bot, interaction.guild.id, "commands", embed)
 
 async def setup(bot):
     await bot.add_cog(LoggingCog(bot))

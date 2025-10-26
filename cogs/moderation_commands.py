@@ -35,9 +35,12 @@ class ModerationCommandsCog(commands.Cog):
     @discord.app_commands.checks.has_permissions(manage_channels=True)
     async def delete_categorie(self, interaction: discord.Interaction, categorie: discord.CategoryChannel):
         await interaction.response.defer(ephemeral=True)
-        count = len(categorie.channels)
+        # Supprimer les salons d'abord
+        for channel in categorie.channels:
+            await channel.delete(reason=f"Supprimé avec la catégorie par {interaction.user}")
+        # Puis la catégorie
         await categorie.delete(reason=f"Supprimé par {interaction.user}")
-        await interaction.followup.send(f"✅ Catégorie **{categorie.name}** et ses **{count}** salons supprimés.", ephemeral=True)
+        await interaction.followup.send(f"✅ Catégorie **{categorie.name}** et ses salons supprimés.", ephemeral=True)
 
     @discord.app_commands.command(name="say", description="Envoie un message dans un salon")
     @discord.app_commands.describe(salon="Salon cible", contenu="Message à envoyer")
