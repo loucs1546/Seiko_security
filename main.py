@@ -16,7 +16,7 @@ async def on_ready():
         "cogs.security.antiraid",
         "cogs.security.antispam",
         "cogs.security.link_filter",
-        "cogs.security.content_filter",  # si tu l'as ajouté
+        "cogs.security.content_filter",  # ← Cette ligne est-elle présente ?
         "cogs.moderation",
         "cogs.tickets",
         "cogs.log_setup"
