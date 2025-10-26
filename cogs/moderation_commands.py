@@ -5,8 +5,7 @@ import core_config as config
 from utils.logging import send_log
 
 def get_sanction_channel(bot):
-    channel_id = config.LOG_CHANNELS.get("sanctions")
-    return bot.get_channel(channel_id)
+    return bot.get_channel(config.LOG_CHANNELS.get("sanctions"))
 
 class ModerationCommandsCog(commands.Cog):
     def __init__(self, bot):
@@ -15,13 +14,7 @@ class ModerationCommandsCog(commands.Cog):
     @discord.app_commands.command(name="ping", description="Affiche la latence du bot")
     async def ping(self, interaction: discord.Interaction):
         latency = round(self.bot.latency * 1000)
-        embed = discord.Embed(
-            title="🏓 Pong !",
-            description=f"Latence : **{latency} ms**",
-            color=0x2ecc71,
-            timestamp=discord.utils.utcnow()
-        )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(f"🏓 Pong ! Latence : **{latency} ms**", ephemeral=True)
 
     @discord.app_commands.command(name="clear-salon", description="Supprime tous les messages du salon")
     @discord.app_commands.checks.has_permissions(manage_messages=True)
@@ -68,9 +61,8 @@ class ModerationCommandsCog(commands.Cog):
             color=0xff9900,
             timestamp=discord.utils.utcnow()
         )
-        sanction_ch = get_sanction_channel(self.bot)
-        if sanction_ch:
-            await sanction_ch.send(embed=embed)
+        ch = get_sanction_channel(self.bot)
+        if ch: await ch.send(embed=embed)
         await interaction.response.send_message(f"✅ {pseudo.mention} expulsé.", ephemeral=True)
 
     @discord.app_commands.command(name="ban", description="Bannit un membre")
@@ -88,9 +80,8 @@ class ModerationCommandsCog(commands.Cog):
             color=0xff0000,
             timestamp=discord.utils.utcnow()
         )
-        sanction_ch = get_sanction_channel(self.bot)
-        if sanction_ch:
-            await sanction_ch.send(embed=embed)
+        ch = get_sanction_channel(self.bot)
+        if ch: await ch.send(embed=embed)
         await interaction.response.send_message(f"✅ {pseudo.mention} banni.", ephemeral=True)
 
     @discord.app_commands.command(name="warn", description="Avertit un membre")
@@ -103,9 +94,8 @@ class ModerationCommandsCog(commands.Cog):
             color=0xffff00,
             timestamp=discord.utils.utcnow()
         )
-        sanction_ch = get_sanction_channel(self.bot)
-        if sanction_ch:
-            await sanction_ch.send(embed=embed)
+        ch = get_sanction_channel(self.bot)
+        if ch: await ch.send(embed=embed)
         await interaction.response.send_message(f"✅ Avertissement envoyé pour {pseudo.mention}.", ephemeral=True)
 
 async def setup(bot):

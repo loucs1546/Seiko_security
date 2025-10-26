@@ -26,7 +26,7 @@ class LinkFilterCog(commands.Cog):
         except:
             pass
 
-        # Envoie un message éphémère DANS LE SALON (visible par tous, mais disparaît)
+        # Message éphémère dans le salon (pas de MP)
         try:
             await message.channel.send(
                 f"{message.author.mention}, votre message contient un lien suspect et a été supprimé.",
@@ -35,21 +35,14 @@ class LinkFilterCog(commands.Cog):
         except:
             pass
 
-        # Logger une seule fois par lien
         for url in urls:
             embed = discord.Embed(
-                title="🔗 Lien suspect détecté",
+                title="⚠️ Lien suspect détecté",
                 description=f"Par {message.author.mention} dans {message.channel.mention}",
                 color=0xff6600,
                 timestamp=discord.utils.utcnow()
             )
             embed.add_field(name="URL", value=url[:1020])
-            if est_url_suspecte(url):
-                embed.title = "⚠️ Lien suspect"
-                embed.color = 0xff6600
-            else:
-                embed.title = "🔗 Lien détecté"
-                embed.color = 0x0099ff
             await send_log(self.bot, "content", embed)
 
 async def setup(bot):

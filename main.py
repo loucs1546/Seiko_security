@@ -10,10 +10,7 @@ intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-@bot.event
-async def on_ready():
-    print(f"✅ {bot.user} est en ligne !")
-    
+async def load_all_cogs():
     cog_paths = [
         "cogs.logging",
         "cogs.security.antiraid",
@@ -25,7 +22,6 @@ async def on_ready():
         "cogs.tickets",
         "cogs.log_setup"
     ]
-    
     for cog in cog_paths:
         try:
             await bot.load_extension(cog)
@@ -33,12 +29,15 @@ async def on_ready():
         except Exception as e:
             print(f"❌ Erreur au chargement de {cog} : {e}")
 
-    # ⏳ Laisse le temps aux cogs de s'inscrire
-    await asyncio.sleep(1)
+@bot.event
+async def on_ready():
+    print(f"✅ {bot.user} est en ligne !")
+    await load_all_cogs()
+    await asyncio.sleep(2)  # Délai critique
 
-    # 🔁 Synchronisation POUR TON SERVEUR UNIQUEMENT (instantané)
     try:
         guild = discord.Object(id=config.GUILD_ID)
+        bot.tree.clear_commands(guild=guild)  # Reset
         synced = await bot.tree.sync(guild=guild)
         print(f"✅ {len(synced)} commandes synchronisées : {[c.name for c in synced]}")
     except Exception as e:

@@ -49,7 +49,6 @@ class LogSetupCog(commands.Cog):
                 channel = await guild.create_text_channel(name=name, category=category)
                 channel_ids[key] = channel.id
 
-            import core_config as config
             config.LOG_CHANNELS = channel_ids
 
             await interaction.followup.send(
