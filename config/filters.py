@@ -1,9 +1,14 @@
 # config/filters.py
 
-# Liste à compléter par toi-même (ex: mots interdits, patterns, etc.)
-MOTS_INTERDITS = set()
+# === LISTE BLANCHE (évite les faux positifs) ===
+WHITELISTED_PHRASES = {
+    "...", "att", "f", "nan", "?", "quoi", "quoi xd", "woaaaaaaaaaaaaaaaa",
+    "ddddd", "ok", "oui", "non", "stp", "s'il te plaît", "merci", "hello",
+    "salut", "bonjour", "aide", "help", "hein", "wtf", "lol", "mdr", "ah",
+    "ouais", "ouai", "bah", "ben", "euh", "hm", "hmm", "bon", "allez"
+}
 
-# Exemples (à remplacer ou compléter) :
+# === MOTS INTERDITS (à compléter avec ta liste) ===
 MOTS_INTERDITS = {
     "connard",
     "conne",
@@ -76,11 +81,8 @@ MOTS_INTERDITS = {
     "escort",
     "viols",
     "abusive",
-    "abuse",
 }
-
-
-# === Mots ou domaines interdits dans les URL ===
+# === MOTS INTERDITS DANS LES URLS ===
 MOTS_INTERDITS_URL = {
     "pornhub",
     "youporn",
@@ -102,16 +104,29 @@ MOTS_INTERDITS_URL = {
 }
 
 def est_contenu_suspect(contenu: str) -> bool:
-    contenu_min = contenu.lower()
+    if not contenu.strip():
+        return False
+    contenu_min = contenu.lower().strip()
+
+    # Liste blanche
+    if contenu_min in WHITELISTED_PHRASES:
+        return False
+
+    # Mots interdits
     for mot in MOTS_INTERDITS:
         if mot in contenu_min:
             return True
+
+    # Trop de majuscules
     if len(contenu) > 5:
         majuscules = sum(1 for c in contenu if c.isupper())
         if majuscules / len(contenu) > 0.7:
             return True
+
+    # Trop répétitif (ex: "aaaaaaa")
     if any(contenu.count(c) / len(contenu) > 0.6 for c in set(contenu)):
         return True
+
     return False
 
 def est_url_suspecte(url: str) -> bool:

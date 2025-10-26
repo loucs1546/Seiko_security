@@ -1,7 +1,9 @@
+# cogs/logging.py
 import discord
 from discord.ext import commands
 import core_config as config
 from utils.logging import send_log
+import time
 
 class LoggingCog(commands.Cog):
     def __init__(self, bot):
@@ -40,15 +42,18 @@ class LoggingCog(commands.Cog):
         if before.guild.id != config.GUILD_ID:
             return
 
+        # Correction du pseudo "Aucun"
         if before.nick != after.nick:
+            old_nick = before.nick or before.global_name or before.name
+            new_nick = after.nick or after.global_name or after.name
             embed = discord.Embed(
                 title="📛 Pseudo modifié",
                 description=f"{after.mention}",
                 color=0x00ccff,
                 timestamp=discord.utils.utcnow()
             )
-            embed.add_field(name="Avant", value=before.nick or "Aucun", inline=True)
-            embed.add_field(name="Après", value=after.nick or "Aucun", inline=True)
+            embed.add_field(name="Avant", value=old_nick, inline=True)
+            embed.add_field(name="Après", value=new_nick, inline=True)
             await send_log(self.bot, "profile", embed)
 
         if before.avatar != after.avatar:
@@ -86,7 +91,32 @@ class LoggingCog(commands.Cog):
             return
 
         embed = None
-        if before.channel is None and after.channel is not None:
+        moderator = "Inconnu"
+
+        # Mute / deafen par un modérateur
+        if before.mute != after.mute or before.deaf != after.deaf:
+            try:
+                async for entry in member.guild.audit_logs(limit=5, action=discord.AuditLogAction.member_update):
+                    if entry.target.id == member.id and abs((entry.created_at - discord.utils.utcnow()).total_seconds()) < 10:
+                        moderator = entry.user
+                        break
+            except:
+                pass
+
+            actions = []
+            if before.mute != after.mute:
+                actions.append("mute vocal" if after.mute else "unmute vocal")
+            if before.deaf != after.deaf:
+                actions.append("sourdine" if after.deaf else "fin de sourdine")
+
+            embed = discord.Embed(
+                title="🎤 État vocal modifié",
+                description=f"{member.mention} — {', '.join(actions)}\n**Modérateur** : {moderator}",
+                color=0x1abc9c,
+                timestamp=discord.utils.utcnow()
+            )
+
+        elif before.channel is None and after.channel is not None:
             embed = discord.Embed(
                 title="🎤 Connexion vocale",
                 description=f"{member.mention} a rejoint {after.channel.mention}",
@@ -106,8 +136,39 @@ class LoggingCog(commands.Cog):
             )
 
         if embed:
-            embed.timestamp = discord.utils.utcnow()
             await send_log(self.bot, "vocal", embed)
+
+    @commands.Cog.listener()
+    async def on_command_completion(self, ctx):
+        if not ctx.guild or ctx.guild.id != config.GUILD_ID:
+            return
+        embed = discord.Embed(
+            title="🛠️ Commande exécutée",
+            description=f"**Utilisateur** : {ctx.author.mention}\n"
+                        f"**Commande** : `{ctx.command}`\n"
+                        f"**Salon** : {ctx.channel.mention}",
+            color=0x2ecc71,
+            timestamp=discord.utils.utcnow()
+        )
+        if ctx.message.content:
+            embed.add_field(name="Contenu", value=ctx.message.content[:1020], inline=False)
+        await send_log(self.bot, "commands", embed)
+
+    @commands.Cog.listener()
+    async def on_command_error(self, ctx, error):
+        if not ctx.guild or ctx.guild.id != config.GUILD_ID:
+            return
+        embed = discord.Embed(
+            title="⚠️ Erreur de commande",
+            description=f"**Utilisateur** : {ctx.author.mention}\n"
+                        f"**Commande** : `{ctx.command}`\n"
+                        f"**Erreur** : `{str(error)}`",
+            color=0xe74c3c,
+            timestamp=discord.utils.utcnow()
+        )
+        if ctx.message.content:
+            embed.add_field(name="Contenu", value=ctx.message.content[:1020], inline=False)
+        await send_log(self.bot, "commands", embed)
 
 async def setup(bot):
     await bot.add_cog(LoggingCog(bot))

@@ -16,9 +16,9 @@ async def on_ready():
         "cogs.logging",
         "cogs.security.antiraid",
         "cogs.security.antispam",
-        "cogs.security.link_filter",
         "cogs.security.content_filter",
-        "cogs.moderation",
+        "cogs.security.link_filter",
+        "cogs.moderation",      # ← Ajouté ici
         "cogs.tickets",
         "cogs.log_setup"
     ]

@@ -18,19 +18,39 @@ class LinkFilterCog(commands.Cog):
             return
 
         urls = URL_REGEX.findall(message.content)
+        if not urls:
+            return
+
+        # Supprimer le message
+        try:
+            await message.delete()
+        except Exception:
+            pass
+
+        # Envoyer un message privé
+        try:
+            await message.author.send(
+                "⚠️ Votre message a été supprimé car il contenait un lien suspect.\n"
+                "Veuillez éviter de partager des URLs non vérifiées."
+            )
+        except Exception:
+            pass
+
+        # Logger une seule fois par lien
         for url in urls:
             embed = discord.Embed(
-                title="🔗 Lien détecté",
+                title="🔗 Lien suspect détecté",
                 description=f"Par {message.author.mention} dans {message.channel.mention}",
-                color=0x0099ff,
+                color=0xff6600,
                 timestamp=discord.utils.utcnow()
             )
             embed.add_field(name="URL", value=url[:1020])
-
             if est_url_suspecte(url):
-                embed.color = 0xff6600
                 embed.title = "⚠️ Lien suspect"
-
+                embed.color = 0xff6600
+            else:
+                embed.title = "🔗 Lien détecté"
+                embed.color = 0x0099ff
             await send_log(self.bot, "content", embed)
 
 async def setup(bot):
