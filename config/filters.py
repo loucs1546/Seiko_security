@@ -15,9 +15,7 @@ MOTS_INTERDITS = {
     "pute",
     "salope",
     "enculé",
-    "merde",
     "bordel",
-    "putain",
     "fuck",
     "shit",
     "bitch",
@@ -42,7 +40,6 @@ MOTS_INTERDITS = {
     "violer",
     "viol",
     "merdal",
-    "chiant",
     "batard",
     "salope",
     "garce",
@@ -66,7 +63,6 @@ MOTS_INTERDITS = {
     "salope de merde",
     "conasse",
     "connasses",
-    "putain de merde",
     "cul",
     "bite",
     "chatte",
@@ -81,6 +77,7 @@ MOTS_INTERDITS = {
     "escort",
     "viols",
     "abusive",
+    "t'es chiant",
 }
 # === MOTS INTERDITS DANS LES URLS ===
 MOTS_INTERDITS_URL = {
