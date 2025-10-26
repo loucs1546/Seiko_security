@@ -1,3 +1,4 @@
+# main.py
 import discord
 from discord.ext import commands
 import core_config as config
@@ -13,14 +14,14 @@ async def on_ready():
     print(f"✅ {bot.user} est en ligne !")
     
     cog_paths = [
+        "cogs.logging",
         "cogs.security.antiraid",
         "cogs.security.antispam",
-        "cogs.security.content_filter",
         "cogs.security.link_filter",
-        "cogs.moderation",      # ← Ajouté ici
+        "cogs.security.content_filter",
+        "cogs.moderation",
         "cogs.tickets",
         "cogs.log_setup"
-        "cogs.logging",
     ]
     
     for cog in cog_paths:
@@ -30,12 +31,18 @@ async def on_ready():
         except Exception as e:
             print(f"❌ Erreur au chargement de {cog} : {e}")
 
-    # Synchronisation explicite
+    # Synchronisation des commandes slash
     guild = discord.Object(id=config.GUILD_ID)
     try:
         synced = await bot.tree.sync(guild=guild)
         print(f"🔁 {len(synced)} commandes synchronisées : {[c.name for c in synced]}")
     except Exception as e:
         print(f"❌ Erreur de synchronisation : {e}")
+
+# === COMMANDE PING ===
+@bot.tree.command(name="ping", description="Vérifie si le bot est en ligne")
+async def ping(interaction: discord.Interaction):
+    latency = round(bot.latency * 1000)
+    await interaction.response.send_message(f"🏓 Pong ! Latence : **{latency} ms**", ephemeral=True)
 
 bot.run(config.DISCORD_TOKEN)
