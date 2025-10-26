@@ -27,12 +27,12 @@ class LinkFilterCog(commands.Cog):
         except Exception:
             pass
 
-        # Envoyer un message privé
         try:
-            await message.author.send(
-                "⚠️ Votre message a été supprimé car il contenait un lien suspect.\n"
-                "Veuillez éviter de partager des URLs non vérifiées."
+            reply = await message.channel.send(
+                f"{message.author.mention}, votre message contient un lien suspect et a été supprimé.",
+                delete_after=5
             )
+            # Optionnel : supprimer aussi le reply après 5s
         except Exception:
             pass
 

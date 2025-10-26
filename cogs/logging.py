@@ -12,7 +12,11 @@ class LoggingCog(commands.Cog):
     # === 1. LOG DE TOUS LES MESSAGES ENVOYÉS ===
     @commands.Cog.listener()
     async def on_message(self, message):
-        if not message.guild or message.guild.id != config.GUILD_ID:
+        if (
+            not message.guild or
+            message.guild.id != config.GUILD_ID or
+            message.author.id == self.bot.user.id  # ← Ignore les messages du bot
+        ):
             return
 
         # Log TOUT, y compris les bots
@@ -77,11 +81,17 @@ class LoggingCog(commands.Cog):
         if before.nick != after.nick:
             moderator = "Inconnu"
             try:
-                async for entry in after.guild.audit_logs(limit=5, action=discord.AuditLogAction.member_update):
-                    if entry.target.id == after.id and entry.changes.nick and abs((entry.created_at - discord.utils.utcnow()).total_seconds()) < 10:
+                async for entry in after.guild.audit_logs(limit=10, action=discord.AuditLogAction.member_update):
+                    if (
+                        entry.target.id == after.id and
+                        hasattr(entry.changes, 'nick') and
+                        entry.changes.nick[0] == before.nick and
+                        entry.changes.nick[1] == after.nick and
+                        abs((entry.created_at - discord.utils.utcnow()).total_seconds()) < 15
+                    ):
                         moderator = entry.user
                         break
-            except:
+            except Exception:
                 pass
 
             old_nick = before.nick or before.global_name or before.name
@@ -148,13 +158,13 @@ class LoggingCog(commands.Cog):
         # --- Mute / Deafen ---
         if before.mute != after.mute or before.deaf != after.deaf:
             try:
-                async for entry in member.guild.audit_logs(limit=5, action=discord.AuditLogAction.member_update):
-                    if entry.target.id == member.id and abs((entry.created_at - discord.utils.utcnow()).total_seconds()) < 10:
-                        if (before.mute != after.mute and hasattr(entry.changes, 'mute')) or \
-                           (before.deaf != after.deaf and hasattr(entry.changes, 'deaf')):
+                async for entry in member.guild.audit_logs(limit=10, action=discord.AuditLogAction.member_update):
+                    if entry.target.id == member.id and abs((entry.created_at - discord.utils.utcnow()).total_seconds()) < 15:
+                        if (before.mute != after.mute and getattr(entry.changes, 'mute', None) is not None) or \
+                        (before.deaf != after.deaf and getattr(entry.changes, 'deaf', None) is not None):
                             moderator = entry.user
                             break
-            except:
+            except Exception:
                 pass
 
             actions = []
@@ -170,33 +180,14 @@ class LoggingCog(commands.Cog):
                 timestamp=discord.utils.utcnow()
             )
 
-        # --- Déconnexion forcée ou déplacement ---
-        elif before.channel and not after.channel:
-            # Déconnexion forcée ?
-            try:
-                async for entry in member.guild.audit_logs(limit=5, action=discord.AuditLogAction.member_disconnect):
-                    if entry.target.id == member.id and abs((entry.created_at - discord.utils.utcnow()).total_seconds()) < 10:
-                        moderator = entry.user
-                        break
-            except:
-                pass
-
-            embed = discord.Embed(
-                title="🎤 Déconnexion forcée" if moderator != "Inconnu" else "🎤 Déconnexion vocale",
-                description=f"{member.mention} a quitté {before.channel.mention}" +
-                            (f"\n**Modérateur** : {moderator}" if moderator != "Inconnu" else ""),
-                color=0xff0000,
-                timestamp=discord.utils.utcnow()
-            )
-
+        # --- Déplacement forcé ---
         elif before.channel and after.channel and before.channel != after.channel:
-            # Déplacement forcé ?
             try:
-                async for entry in member.guild.audit_logs(limit=5, action=discord.AuditLogAction.member_move):
-                    if entry.target.id == member.id and abs((entry.created_at - discord.utils.utcnow()).total_seconds()) < 10:
+                async for entry in member.guild.audit_logs(limit=10, action=discord.AuditLogAction.member_move):
+                    if entry.target.id == member.id and abs((entry.created_at - discord.utils.utcnow()).total_seconds()) < 15:
                         moderator = entry.user
                         break
-            except:
+            except Exception:
                 pass
 
             embed = discord.Embed(
@@ -207,6 +198,25 @@ class LoggingCog(commands.Cog):
                 timestamp=discord.utils.utcnow()
             )
 
+        # --- Déconnexion forcée ---
+        elif before.channel and not after.channel:
+            try:
+                async for entry in member.guild.audit_logs(limit=10, action=discord.AuditLogAction.member_disconnect):
+                    if entry.target.id == member.id and abs((entry.created_at - discord.utils.utcnow()).total_seconds()) < 15:
+                        moderator = entry.user
+                        break
+            except Exception:
+                pass
+
+            embed = discord.Embed(
+                title="🎤 Déconnexion forcée" if moderator != "Inconnu" else "🎤 Déconnexion vocale",
+                description=f"{member.mention} a quitté {before.channel.mention}" +
+                            (f"\n**Modérateur** : {moderator}" if moderator != "Inconnu" else ""),
+                color=0xff0000,
+                timestamp=discord.utils.utcnow()
+            )
+
+        # --- Connexion normale ---
         elif not before.channel and after.channel:
             embed = discord.Embed(
                 title="🎤 Connexion vocale",

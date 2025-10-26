@@ -33,6 +33,7 @@ class LogSetupCog(commands.Cog):
                 }
             )
 
+
             salon_configs = [
                 ("📜・messages", "messages"),
                 ("🎤・vocal", "vocal"),
@@ -41,7 +42,8 @@ class LogSetupCog(commands.Cog):
                 ("👑・rôles", "roles"),
                 ("📛・profil", "profile"),
                 ("🔍・contenu", "content"),
-                ("🚨・alertes", "alerts")
+                ("🚨・alertes", "alerts"),
+                ("⚖️・sanctions", "sanctions")  # ← Ajouté
             ]
 
             channel_ids = {}

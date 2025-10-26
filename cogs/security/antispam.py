@@ -34,12 +34,13 @@ class AntiSpamCog(commands.Cog):
         # Vérifier si spam : ≥5 messages en 5s
         if len(self.user_messages[uid]) >= 5:
             contents = [msg[1] for msg in self.user_messages[uid]]
-            is_repetitive = len(set(contents)) == 1  # Tous les messages identiques
-            is_short = all(len(c) <= 5 for c in contents)  # Tous très courts
+            is_repetitive = len(set(contents)) == 1
+            is_short = all(len(c) <= 5 for c in contents)
 
             if is_repetitive or is_short:
                 try:
                     await message.delete()
+                    # Un seul message éphémère
                     await message.channel.send(
                         f"{message.author.mention}, veuillez ne pas spammer.",
                         delete_after=5
@@ -53,7 +54,7 @@ class AntiSpamCog(commands.Cog):
                     embed.add_field(name="Contenu", value=message.content[:1020])
                     await send_log(self.bot, "threats", embed)
                 except Exception:
-                    pass  # Échec silencieux si pas la permission
+                    pass
 
 async def setup(bot):
     await bot.add_cog(AntiSpamCog(bot))
