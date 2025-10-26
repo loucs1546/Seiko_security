@@ -29,7 +29,7 @@ class ContentFilterCog(commands.Cog):
             embed.add_field(name="Extrait", value=message.content[:100], inline=False)
             await send_log(self.bot, "content", embed)
 async def setup(bot):
-    print("✅ Filtre de contenu activé")
+    print("✅ Cog 'content_filter' chargé")
     await bot.add_cog(ContentFilterCog(bot))
 
 async def setup(bot):
