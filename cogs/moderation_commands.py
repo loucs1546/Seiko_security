@@ -111,6 +111,18 @@ class ModerationCommandsCog(commands.Cog):
         if sanction_ch:
             await sanction_ch.send(embed=embed)
         await interaction.response.send_message(f"✅ Avertissement envoyé pour {pseudo.mention}.", ephemeral=True)
+    async def cog_load(self):
+        print("⚙️ Ajout de la commande create-categorie-log...")
+        guild = discord.Object(id=config.GUILD_ID)
+        command = discord.app_commands.Command(
+            name="create-categorie-log",
+            description="Crée une catégorie complète de salons de surveillance",
+            callback=self.create_log_category_callback
+        )
+        self.bot.tree.add_command(command, guild=guild)
+    @discord.app_commands.command(name="testcmd", description="Test")
+    async def testcmd(self, interaction: discord.Interaction):
+        await interaction.response.send_message("OK", ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(ModerationCommandsCog(bot))
