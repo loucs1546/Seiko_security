@@ -13,7 +13,6 @@ async def on_ready():
     print(f"✅ {bot.user} est en ligne !")
     
     cog_paths = [
-        "cogs.logging",
         "cogs.security.antiraid",
         "cogs.security.antispam",
         "cogs.security.content_filter",
@@ -21,6 +20,7 @@ async def on_ready():
         "cogs.moderation",      # ← Ajouté ici
         "cogs.tickets",
         "cogs.log_setup"
+        "cogs.logging",
     ]
     
     for cog in cog_paths:

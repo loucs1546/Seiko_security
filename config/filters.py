@@ -78,6 +78,12 @@ MOTS_INTERDITS = {
     "viols",
     "abusive",
     "t'es chiant",
+    "mange tes morts",
+    "tg",
+    "fdp",
+    "ta gueule",
+    "sale chien",
+    "sale merde"
 }
 # === MOTS INTERDITS DANS LES URLS ===
 MOTS_INTERDITS_URL = {
