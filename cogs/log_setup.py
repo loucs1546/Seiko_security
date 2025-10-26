@@ -7,13 +7,12 @@ class LogSetupCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @discord.app_commands.command(name="create-categorie-log", description="Crée une catégorie complète de salons de surveillance")
+    @discord.app_commands.command(name="add-cat-log", description="Crée une catégorie complète de salons de surveillance")
     @discord.app_commands.checks.has_permissions(administrator=True)
-    async def create_categorie_log(self, interaction: discord.Interaction):
+    async def add_cat_log(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         guild = interaction.guild
 
-        # Vérifier si une catégorie de logs existe déjà
         for category in guild.categories:
             if "log" in category.name.lower() or "surveillance" in category.name.lower():
                 await interaction.followup.send(
