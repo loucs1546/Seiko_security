@@ -42,5 +42,8 @@ async def on_ready():
         print(f"✅ {len(synced)} commandes synchronisées pour le serveur : {[c.name for c in synced]}")
     except Exception as e:
         print(f"❌ Erreur de synchronisation : {e}")
-
+# main.py — ajoute ceci AVANT bot.run()
+@bot.tree.command(name="test", description="Commande de test")
+async def test(interaction: discord.Interaction):
+    await interaction.response.send_message("✅ Test réussi !", ephemeral=True)
 bot.run(config.DISCORD_TOKEN)

@@ -110,6 +110,10 @@ class ModerationCommandsCog(commands.Cog):
             await sanction_ch.send(embed=embed)
         await interaction.response.send_message(f"✅ Avertissement envoyé pour {pseudo.mention}.", ephemeral=True)
 
-# ⚠️ PAS DE cog_load ICI !
 async def setup(bot):
-    await bot.add_cog(ModerationCommandsCog(bot))
+    cog = ModerationCommandsCog(bot)
+    await bot.add_cog(cog)
+    # Enregistre manuellement les commandes (sécurité)
+    for command in cog.__class__.__dict__.values():
+        if isinstance(command, discord.app_commands.Command):
+            bot.tree.add_command(command)
