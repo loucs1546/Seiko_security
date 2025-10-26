@@ -31,19 +31,17 @@ async def on_ready():
             await bot.load_extension(cog)
             print(f"✅ Cog chargé : {cog}")
         except Exception as e:
-            print(f"❌ Erreur : {e}")
+            print(f"❌ Erreur au chargement de {cog} : {e}")
 
+    # ⏳ Laisse le temps aux cogs de s'inscrire
     await asyncio.sleep(1)
 
-    # 🔁 SYNCHRONISATION POUR TON SERVEUR UNIQUEMENT (instantané)
+    # 🔁 Synchronisation POUR TON SERVEUR UNIQUEMENT (instantané)
     try:
         guild = discord.Object(id=config.GUILD_ID)
         synced = await bot.tree.sync(guild=guild)
-        print(f"✅ {len(synced)} commandes synchronisées pour le serveur : {[c.name for c in synced]}")
+        print(f"✅ {len(synced)} commandes synchronisées : {[c.name for c in synced]}")
     except Exception as e:
         print(f"❌ Erreur de synchronisation : {e}")
-# main.py — ajoute ceci AVANT bot.run()
-@bot.tree.command(name="test", description="Commande de test")
-async def test(interaction: discord.Interaction):
-    await interaction.response.send_message("✅ Test réussi !", ephemeral=True)
+
 bot.run(config.DISCORD_TOKEN)

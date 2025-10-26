@@ -12,17 +12,15 @@ class ModerationCommandsCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @discord.app_commands.command(name="ping", description="Affiche le statut et la latence du bot")
+    @discord.app_commands.command(name="ping", description="Affiche la latence du bot")
     async def ping(self, interaction: discord.Interaction):
         latency = round(self.bot.latency * 1000)
         embed = discord.Embed(
             title="🏓 Pong !",
+            description=f"Latence : **{latency} ms**",
             color=0x2ecc71,
             timestamp=discord.utils.utcnow()
         )
-        embed.add_field(name="Latence", value=f"`{latency} ms`", inline=True)
-        embed.add_field(name="Serveur", value=f"`{interaction.guild.name if interaction.guild else 'DM'}`", inline=True)
-        embed.set_footer(text=f"Bot : {self.bot.user}", icon_url=self.bot.user.display_avatar.url)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @discord.app_commands.command(name="clear-salon", description="Supprime tous les messages du salon")
@@ -32,7 +30,7 @@ class ModerationCommandsCog(commands.Cog):
         deleted = await interaction.channel.purge(limit=1000)
         await interaction.followup.send(f"🧹 **{len(deleted)}** messages supprimés.", ephemeral=True)
 
-    @discord.app_commands.command(name="delete-salon", description="Supprime le salon spécifié")
+    @discord.app_commands.command(name="delete-salon", description="Supprime un salon")
     @discord.app_commands.describe(salon="Salon à supprimer")
     @discord.app_commands.checks.has_permissions(manage_channels=True)
     async def delete_salon(self, interaction: discord.Interaction, salon: discord.TextChannel):
@@ -76,7 +74,7 @@ class ModerationCommandsCog(commands.Cog):
         await interaction.response.send_message(f"✅ {pseudo.mention} expulsé.", ephemeral=True)
 
     @discord.app_commands.command(name="ban", description="Bannit un membre")
-    @discord.app_commands.describe(pseudo="Membre à bannir", temps="Durée (en jours, 0 = permanent)", raison="Raison du ban")
+    @discord.app_commands.describe(pseudo="Membre à bannir", temps="Jours de suppression des messages (0 = aucun)", raison="Raison du ban")
     @discord.app_commands.checks.has_permissions(ban_members=True)
     async def ban(self, interaction: discord.Interaction, pseudo: discord.Member, temps: int = 0, raison: str = "Aucune raison"):
         try:
@@ -86,7 +84,7 @@ class ModerationCommandsCog(commands.Cog):
         await pseudo.ban(reason=raison, delete_message_days=temps)
         embed = discord.Embed(
             title="🔨 Ban",
-            description=f"**Membre** : {pseudo.mention}\n**Modérateur** : {interaction.user.mention}\n**Durée** : {'Permanent' if temps == 0 else f'{temps} jours'}\n**Raison** : {raison}",
+            description=f"**Membre** : {pseudo.mention}\n**Modérateur** : {interaction.user.mention}\n**Raison** : {raison}",
             color=0xff0000,
             timestamp=discord.utils.utcnow()
         )
@@ -111,9 +109,4 @@ class ModerationCommandsCog(commands.Cog):
         await interaction.response.send_message(f"✅ Avertissement envoyé pour {pseudo.mention}.", ephemeral=True)
 
 async def setup(bot):
-    cog = ModerationCommandsCog(bot)
-    await bot.add_cog(cog)
-    # Enregistre manuellement les commandes (sécurité)
-    for command in cog.__class__.__dict__.values():
-        if isinstance(command, discord.app_commands.Command):
-            bot.tree.add_command(command)
+    await bot.add_cog(ModerationCommandsCog(bot))

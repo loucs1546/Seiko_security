@@ -21,19 +21,18 @@ class LinkFilterCog(commands.Cog):
         if not urls:
             return
 
-        # Supprimer le message
         try:
             await message.delete()
-        except Exception:
+        except:
             pass
 
+        # Envoie un message éphémère DANS LE SALON (visible par tous, mais disparaît)
         try:
-            reply = await message.channel.send(
+            await message.channel.send(
                 f"{message.author.mention}, votre message contient un lien suspect et a été supprimé.",
                 delete_after=5
             )
-            # Optionnel : supprimer aussi le reply après 5s
-        except Exception:
+        except:
             pass
 
         # Logger une seule fois par lien

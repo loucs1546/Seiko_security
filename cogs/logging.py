@@ -18,6 +18,7 @@ class LoggingCog(commands.Cog):
             message.author.id == self.bot.user.id  # ← Ignore les messages du bot
         ):
             return
+        # ... reste du code
 
         # Log TOUT, y compris les bots
         embed = discord.Embed(

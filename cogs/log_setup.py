@@ -12,10 +12,9 @@ class LogSetupCog(commands.Cog):
             await interaction.response.send_message("❌ Réservé aux administrateurs.", ephemeral=True)
             return
 
-        # ✅ DÉBUT : Réponds immédiatement "en cours..."
         await interaction.response.defer(ephemeral=True)
-
         guild = interaction.guild
+
         for category in guild.categories:
             if "log" in category.name.lower() or "surveillance" in category.name.lower():
                 await interaction.followup.send(
@@ -33,7 +32,6 @@ class LogSetupCog(commands.Cog):
                 }
             )
 
-
             salon_configs = [
                 ("📜・messages", "messages"),
                 ("🎤・vocal", "vocal"),
@@ -43,7 +41,7 @@ class LogSetupCog(commands.Cog):
                 ("📛・profil", "profile"),
                 ("🔍・contenu", "content"),
                 ("🚨・alertes", "alerts"),
-                ("⚖️・sanctions", "sanctions")  # ← Ajouté
+                ("⚖️・sanctions", "sanctions")
             ]
 
             channel_ids = {}
@@ -54,7 +52,6 @@ class LogSetupCog(commands.Cog):
             import core_config as config
             config.LOG_CHANNELS = channel_ids
 
-            # ✅ FIN : Envoie le message final via followup
             await interaction.followup.send(
                 f"✅ Catégorie **{category.name}** créée avec {len(salon_configs)} salons !",
                 ephemeral=True
