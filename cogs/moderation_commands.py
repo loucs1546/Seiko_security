@@ -15,15 +15,13 @@ class ModerationCommandsCog(commands.Cog):
     @discord.app_commands.command(name="ping", description="Affiche le statut et la latence du bot")
     async def ping(self, interaction: discord.Interaction):
         latency = round(self.bot.latency * 1000)
-        uptime = discord.utils.utcnow() - self.bot.user.created_at
         embed = discord.Embed(
             title="🏓 Pong !",
             color=0x2ecc71,
             timestamp=discord.utils.utcnow()
         )
         embed.add_field(name="Latence", value=f"`{latency} ms`", inline=True)
-        embed.add_field(name="Shard", value=f"`{interaction.guild.shard_id if interaction.guild else 'N/A'}`", inline=True)
-        embed.add_field(name="Uptime", value=f"`{str(uptime).split('.')[0]}`", inline=False)
+        embed.add_field(name="Serveur", value=f"`{interaction.guild.name if interaction.guild else 'DM'}`", inline=True)
         embed.set_footer(text=f"Bot : {self.bot.user}", icon_url=self.bot.user.display_avatar.url)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -111,18 +109,7 @@ class ModerationCommandsCog(commands.Cog):
         if sanction_ch:
             await sanction_ch.send(embed=embed)
         await interaction.response.send_message(f"✅ Avertissement envoyé pour {pseudo.mention}.", ephemeral=True)
-    async def cog_load(self):
-        print("⚙️ Ajout de la commande create-categorie-log...")
-        guild = discord.Object(id=config.GUILD_ID)
-        command = discord.app_commands.Command(
-            name="create-categorie-log",
-            description="Crée une catégorie complète de salons de surveillance",
-            callback=self.create_log_category_callback
-        )
-        self.bot.tree.add_command(command, guild=guild)
-    @discord.app_commands.command(name="testcmd", description="Test")
-    async def testcmd(self, interaction: discord.Interaction):
-        await interaction.response.send_message("OK", ephemeral=True)
 
+# ⚠️ PAS DE cog_load ICI !
 async def setup(bot):
     await bot.add_cog(ModerationCommandsCog(bot))
