@@ -7,14 +7,13 @@ class LogSetupCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    async def create_log_category_callback(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("❌ Réservé aux administrateurs.", ephemeral=True)
-            return
-
+    @discord.app_commands.command(name="create-categorie-log", description="Crée une catégorie complète de salons de surveillance")
+    @discord.app_commands.checks.has_permissions(administrator=True)
+    async def create_categorie_log(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         guild = interaction.guild
 
+        # Vérifier si une catégorie de logs existe déjà
         for category in guild.categories:
             if "log" in category.name.lower() or "surveillance" in category.name.lower():
                 await interaction.followup.send(
@@ -58,15 +57,6 @@ class LogSetupCog(commands.Cog):
 
         except Exception as e:
             await interaction.followup.send(f"❌ Erreur : {str(e)}", ephemeral=True)
-
-    async def cog_load(self):
-        guild = discord.Object(id=config.GUILD_ID)
-        command = discord.app_commands.Command(
-            name="create-categorie-log",
-            description="Crée une catégorie complète de salons de surveillance",
-            callback=self.create_log_category_callback
-        )
-        self.bot.tree.add_command(command, guild=guild)
 
 async def setup(bot):
     await bot.add_cog(LogSetupCog(bot))
