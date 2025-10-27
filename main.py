@@ -20,12 +20,10 @@ async def on_ready():
         "cogs.security.antispam",
         "cogs.security.content_filter",
         "cogs.security.link_filter",
-        "cogs.moderation_commands",  # ← Contient TOUTES les commandes + /reachlog
+        "cogs.moderation_commands",  # ← Contient TOUTES les commandes
         "cogs.tickets",
-        "cogs.config"  # ← Interface complète
+        "cogs.config"
     ]
-
-    # test
     
     for cog in cog_paths:
         try:
@@ -34,11 +32,14 @@ async def on_ready():
         except Exception as e:
             print(f"❌ Erreur : {e}")
 
-    # main.py — DANS LA FONCTION on_ready, rempace la sync par :
+    await asyncio.sleep(1)
 
-    await asyncio.sleep(2)
-    # SYNC GLOBALE (une seule fois)
-    synced = await bot.tree.sync()
-    print(f"✅ {len(synced)} commandes GLOBALES synchronisées : {[c.name for c in synced]}")
+    # 🔁 SYNCHRONISATION POUR TON SERVEUR (instantané)
+    try:
+        guild = discord.Object(id=config.GUILD_ID)
+        synced = await bot.tree.sync(guild=guild)
+        print(f"✅ {len(synced)} commandes synchronisées : {[c.name for c in synced]}")
+    except Exception as e:
+        print(f"❌ Erreur de synchronisation : {e}")
 
 bot.run(config.DISCORD_TOKEN)
