@@ -23,15 +23,24 @@ class LinkFilterCog(commands.Cog):
 
         try:
             await message.delete()
-        except:
-            pass
+            # ✅ Loguer ICI
+            embed = discord.Embed(
+                title="🗑️ Message supprimé (lien suspect)",
+                description=f"**Auteur** : {message.author.mention}\n"
+                            f"**Salon** : {message.channel.mention}\n"
+                            f"**Supprimé par** : {self.bot.user.mention} (bot)",
+                color=0xff6600,
+                timestamp=discord.utils.utcnow()
+            )
+            if message.content:
+                embed.add_field(name="Contenu", value=message.content[:1020], inline=False)
+            await send_log(self.bot, "messages", embed)
 
-        try:
             await message.channel.send(
                 f"{message.author.mention}, votre message contient un lien suspect et a été supprimé.",
                 delete_after=5
             )
-        except:
+        except Exception:
             pass
 
         for url in urls:
