@@ -34,7 +34,7 @@ class ConfigSecurityView(discord.ui.View):
         super().__init__(timeout=300)
         self.bot = bot
 
-    @discord.ui.button(label="Anti-Spam", style=discord.ButtonStyle.gray, custom_id="anti_spam")
+    @discord.ui.button(label="Anti-Spam", style=discord.ButtonStyle.gray)
     async def anti_spam_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         current = config.CONFIG["security"]["anti_spam"]
         config.CONFIG["security"]["anti_spam"] = not current
@@ -42,7 +42,7 @@ class ConfigSecurityView(discord.ui.View):
         button.label = "Anti-Spam ✅" if not current else "Anti-Spam"
         await interaction.response.edit_message(view=self)
 
-    @discord.ui.button(label="Anti-Hack", style=discord.ButtonStyle.gray, custom_id="anti_hack")
+    @discord.ui.button(label="Anti-Hack", style=discord.ButtonStyle.gray)
     async def anti_hack_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         current = config.CONFIG["security"]["anti_hack"]
         config.CONFIG["security"]["anti_hack"] = not current
@@ -50,7 +50,7 @@ class ConfigSecurityView(discord.ui.View):
         button.label = "Anti-Hack ✅" if not current else "Anti-Hack"
         await interaction.response.edit_message(view=self)
 
-    @discord.ui.button(label="Anti-Raid", style=discord.ButtonStyle.gray, custom_id="anti_raid")
+    @discord.ui.button(label="Anti-Raid", style=discord.ButtonStyle.gray)
     async def anti_raid_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         current = config.CONFIG["security"]["anti_raid"]
         config.CONFIG["security"]["anti_raid"] = not current
@@ -110,53 +110,70 @@ class ConfigLogsView(discord.ui.View):
 
     @discord.ui.button(label="Définir manuellement", style=discord.ButtonStyle.secondary)
     async def define_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message(
-            "📝 Cliquez sur un type de log pour le configurer :",
-            view=ConfigDefineTypeView(self.bot),
-            ephemeral=True
-        )
-
-class ConfigDefineTypeView(discord.ui.View):
-    def __init__(self, bot):
-        super().__init__(timeout=300)
-        self.bot = bot
-
-    @discord.ui.select(
-        placeholder="Choisissez un type de log...",
-        options=[
-            discord.SelectOption(label="Messages", value="messages"),
-            discord.SelectOption(label="Vocal", value="vocal"),
-            discord.SelectOption(label="Commandes", value="commands"),
-            discord.SelectOption(label="Rôles", value="roles"),
-            discord.SelectOption(label="Profil", value="profile"),
-            discord.SelectOption(label="Contenu", value="content"),
-            discord.SelectOption(label="Sanctions", value="sanctions")
-        ]
-    )
-    async def select_callback(self, interaction: discord.Interaction, select: discord.ui.Select):
-        log_type = select.values[0]
-        await interaction.response.send_message(
-            f"📌 Sélectionnez un salon pour les logs de **{log_type}** :",
-            view=ConfigChannelSelectView(log_type),
-            ephemeral=True
-        )
-
-class ConfigChannelSelectView(discord.ui.View):
-    def __init__(self, log_type):
-        super().__init__(timeout=300)
-        self.log_type = log_type
-
-    @discord.ui.channel_select(placeholder="Sélectionnez un salon texte...")
-    async def channel_select(self, interaction: discord.Interaction, select: discord.ui.ChannelSelect):
-        channel = select.values[0]
-        if not isinstance(channel, discord.TextChannel):
-            await interaction.response.send_message("❌ Veuillez choisir un salon texte.", ephemeral=True)
+        # Obtenir la liste des salons textuels
+        text_channels = [ch for ch in interaction.guild.text_channels if isinstance(ch, discord.TextChannel)]
+        if not text_channels:
+            await interaction.response.send_message("❌ Aucun salon texte trouvé.", ephemeral=True)
             return
-        config.CONFIG["logs"][self.log_type] = channel.id
+
+        options = []
+        for ch in text_channels[:25]:  # Discord limite à 25 options
+            options.append(discord.SelectOption(label=ch.name, value=str(ch.id)))
+
+        select = discord.ui.Select(
+            placeholder="Choisissez un salon pour les logs de messages...",
+            options=options,
+            custom_id="log_messages"
+        )
+        select.callback = self.make_callback("messages")
+
+        view = discord.ui.View(timeout=300)
+        view.add_item(select)
         await interaction.response.send_message(
-            f"✅ Salon **{channel.mention}** défini pour **{self.log_type}**.",
+            "📝 **Étape 1/7** : Sélectionnez le salon pour les **messages** :",
+            view=view,
             ephemeral=True
         )
+
+    def make_callback(self, log_type):
+        async def callback(interaction: discord.Interaction):
+            channel_id = int(interaction.data["values"][0])
+            config.CONFIG["logs"][log_type] = channel_id
+            channel = interaction.guild.get_channel(channel_id)
+
+            # Passer à l'étape suivante
+            next_steps = {
+                "messages": ("vocal", "vocal"),
+                "vocal": ("commandes", "commands"),
+                "commands": ("rôles", "roles"),
+                "roles": ("profil", "profile"),
+                "profile": ("contenu", "content"),
+                "content": ("sanctions", "sanctions"),
+                "sanctions": None
+            }
+
+            if next_steps[log_type] is None:
+                await interaction.response.edit_message(content="✅ Tous les salons de logs ont été définis !", view=None)
+                return
+
+            next_label, next_key = next_steps[log_type]
+            text_channels = [ch for ch in interaction.guild.text_channels if isinstance(ch, discord.TextChannel)]
+            options = [discord.SelectOption(label=ch.name, value=str(ch.id)) for ch in text_channels[:25]]
+
+            select = discord.ui.Select(
+                placeholder=f"Choisissez un salon pour les logs de {next_label}...",
+                options=options
+            )
+            select.callback = self.make_callback(next_key)
+
+            view = discord.ui.View(timeout=300)
+            view.add_item(select)
+            await interaction.response.edit_message(
+                content=f"📝 **Étape suivante** : Sélectionnez le salon pour les **{next_label}** :",
+                view=view
+            )
+
+        return callback
 
 async def setup(bot):
     await bot.add_cog(ConfigCog(bot))
