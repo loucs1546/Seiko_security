@@ -8,6 +8,17 @@ class LoggingCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    # === Fonction utilitaire : récupère l'auteur depuis les logs d'audit ===
+    async def get_audit_author(self, guild, target_id, action_type, max_age_seconds=10):
+        try:
+            async for entry in guild.audit_logs(action=action_type, limit=10):
+                if entry.target.id == target_id and (discord.utils.utcnow() - entry.created_at).total_seconds() < max_age_seconds:
+                    return entry.user
+        except Exception:
+            pass
+        return None
+
+    # === MESSAGES (inchangés) ===
     @commands.Cog.listener()
     async def on_message(self, message):
         if not message.guild or message.guild.id != config.GUILD_ID or message.author.id == self.bot.user.id:
@@ -41,7 +52,6 @@ class LoggingCog(commands.Cog):
     async def on_message_delete(self, message):
         if not message.guild or message.guild.id != config.GUILD_ID or message.author.bot:
             return
-        # ❌ On NE tente PAS de deviner qui a supprimé
         embed = discord.Embed(
             title="🗑️ Message supprimé",
             description=f"**Auteur** : {message.author.mention}\n**Salon** : {message.channel.mention}",
@@ -52,14 +62,24 @@ class LoggingCog(commands.Cog):
             embed.add_field(name="Contenu", value=message.content[:1020], inline=False)
         await send_log(self.bot, "messages", embed)
 
+    # === CHANGEMENT DE PSEUDO (avec "Fait par") ===
     @commands.Cog.listener()
     async def on_member_update(self, before, after):
         if before.guild.id != config.GUILD_ID:
             return
 
         if before.nick != after.nick:
+            moderator = await self.get_audit_author(
+                after.guild,
+                after.id,
+                discord.AuditLogAction.member_update,
+                max_age_seconds=15
+            )
+            fait_par = moderator.mention if moderator else "Inconnu"
+
             old_nick = before.nick or before.global_name or before.name
             new_nick = after.nick or after.global_name or after.name
+
             embed = discord.Embed(
                 title="📛 Pseudo modifié",
                 description=f"{after.mention}",
@@ -68,6 +88,7 @@ class LoggingCog(commands.Cog):
             )
             embed.add_field(name="Avant", value=old_nick, inline=True)
             embed.add_field(name="Après", value=new_nick, inline=True)
+            embed.add_field(name="Fait par", value=fait_par, inline=False)
             await send_log(self.bot, "profile", embed)
 
         if before.avatar != after.avatar:
@@ -83,15 +104,13 @@ class LoggingCog(commands.Cog):
         before_roles = set(before.roles)
         after_roles = set(after.roles)
         if before_roles != after_roles:
-            # ✅ Pour les rôles, on garde la détection (car ça marche)
-            moderator = "Inconnu"
-            try:
-                async for entry in after.guild.audit_logs(limit=5, action=discord.AuditLogAction.member_role_update):
-                    if entry.target.id == after.id and (discord.utils.utcnow() - entry.created_at).total_seconds() < 10:
-                        moderator = entry.user
-                        break
-            except:
-                pass
+            moderator = await self.get_audit_author(
+                after.guild,
+                after.id,
+                discord.AuditLogAction.member_role_update,
+                max_age_seconds=15
+            )
+            fait_par = moderator.mention if moderator else "Inconnu"
 
             added = after_roles - before_roles
             removed = before_roles - after_roles
@@ -101,26 +120,17 @@ class LoggingCog(commands.Cog):
             if desc:
                 embed = discord.Embed(
                     title="👑 Rôles modifiés",
-                    description=f"{after.mention}\n**Modifié par** : {moderator}\n{desc}",
+                    description=f"{after.mention}\n{desc}**Fait par** : {fait_par}",
                     color=0xffaa00,
                     timestamp=discord.utils.utcnow()
                 )
                 await send_log(self.bot, "roles", embed)
 
+    # === ÉVÉNEMENTS VOCAUX (avec "Fait par") ===
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
         if member.guild.id != config.GUILD_ID:
             return
-
-        # Fonction pour obtenir l'auteur d'une action depuis les logs d'audit
-        async def get_audit_author(guild, target_id, action_type, max_age_seconds=10):
-            try:
-                async for entry in guild.audit_logs(action=action_type, limit=10):
-                    if entry.target.id == target_id and (discord.utils.utcnow() - entry.created_at).total_seconds() < max_age_seconds:
-                        return entry.user
-            except Exception:
-                pass
-            return None
 
         # --- Connexion ---
         if before.channel is None and after.channel is not None:
@@ -134,7 +144,12 @@ class LoggingCog(commands.Cog):
 
         # --- Déconnexion ---
         elif before.channel is not None and after.channel is None:
-            moderator = await get_audit_author(member.guild, member.id, discord.AuditLogAction.member_disconnect)
+            moderator = await self.get_audit_author(
+                member.guild,
+                member.id,
+                discord.AuditLogAction.member_disconnect,
+                max_age_seconds=15
+            )
             fait_par = moderator.mention if moderator else member.mention
             embed = discord.Embed(
                 title="🎤 Déconnexion vocale",
@@ -146,7 +161,12 @@ class LoggingCog(commands.Cog):
 
         # --- Déplacement ---
         elif before.channel and after.channel and before.channel != after.channel:
-            moderator = await get_audit_author(member.guild, member.id, discord.AuditLogAction.member_move)
+            moderator = await self.get_audit_author(
+                member.guild,
+                member.id,
+                discord.AuditLogAction.member_move,
+                max_age_seconds=15
+            )
             fait_par = moderator.mention if moderator else member.mention
             embed = discord.Embed(
                 title="🎤 Déplacement vocal",
@@ -158,7 +178,12 @@ class LoggingCog(commands.Cog):
 
         # --- Mute / Deafen ---
         elif before.mute != after.mute or before.deaf != after.deaf:
-            moderator = await get_audit_author(member.guild, member.id, discord.AuditLogAction.member_update)
+            moderator = await self.get_audit_author(
+                member.guild,
+                member.id,
+                discord.AuditLogAction.member_update,
+                max_age_seconds=15
+            )
             fait_par = moderator.mention if moderator else "Inconnu"
             actions = []
             if before.mute != after.mute:
@@ -173,6 +198,7 @@ class LoggingCog(commands.Cog):
             )
             await send_log(self.bot, "vocal", embed)
 
+    # === COMMANDES (inchangé) ===
     @commands.Cog.listener()
     async def on_interaction(self, interaction: discord.Interaction):
         if not interaction.guild or interaction.guild.id != config.GUILD_ID or interaction.type != discord.InteractionType.application_command:
