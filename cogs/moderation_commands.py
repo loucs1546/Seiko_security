@@ -5,12 +5,32 @@ import core_config as config
 from utils.logging import send_log
 
 def get_sanction_channel(bot):
-    return bot.get_channel(config.LOG_CHANNELS.get("sanctions"))
+    return bot.get_channel(config.CONFIG["logs"].get("sanctions"))
 
 class ModerationCommandsCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    # === COMMANDES DE SÉCURITÉ (modifiées) ===
+    @discord.app_commands.command(name="anti-spam", description="Active/désactive l'anti-spam")
+    @discord.app_commands.checks.has_permissions(administrator=True)
+    async def anti_spam(self, interaction: discord.Interaction, actif: bool):
+        config.CONFIG["security"]["anti_spam"] = actif  # ← Ligne ajoutée
+        await interaction.response.send_message(f"✅ Anti-spam {'activé' if actif else 'désactivé'}.", ephemeral=True)
+
+    @discord.app_commands.command(name="anti-raid", description="Active/désactive l'anti-raid")
+    @discord.app_commands.checks.has_permissions(administrator=True)
+    async def anti_raid(self, interaction: discord.Interaction, actif: bool):
+        config.CONFIG["security"]["anti_raid"] = actif  # ← Ligne ajoutée
+        await interaction.response.send_message(f"✅ Anti-raid {'activé' if actif else 'désactivé'}.", ephemeral=True)
+
+    @discord.app_commands.command(name="anti-hack", description="Active/désactive l'anti-hack")
+    @discord.app_commands.checks.has_permissions(administrator=True)
+    async def anti_hack(self, interaction: discord.Interaction, actif: bool):
+        config.CONFIG["security"]["anti_hack"] = actif  # ← Ligne ajoutée
+        await interaction.response.send_message(f"✅ Anti-hack {'activé' if actif else 'désactivé'}.", ephemeral=True)
+
+    # === AUTRES COMMANDES (inchangées) ===
     @discord.app_commands.command(name="ping", description="Affiche la latence du bot")
     async def ping(self, interaction: discord.Interaction):
         latency = round(self.bot.latency * 1000)
@@ -34,18 +54,15 @@ class ModerationCommandsCog(commands.Cog):
     @discord.app_commands.describe(categorie="Catégorie à supprimer")
     @discord.app_commands.checks.has_permissions(manage_channels=True)
     async def delete_categorie(self, interaction: discord.Interaction, categorie: discord.CategoryChannel):
-        # ✅ Réponse immédiate pour éviter l'erreur 10008
         await interaction.response.send_message(
             f"✅ Suppression de la catégorie **{categorie.name}** en cours...",
             ephemeral=True
         )
-        # Supprimer les salons d'abord
         for channel in categorie.channels:
             try:
                 await channel.delete(reason=f"Supprimé avec la catégorie par {interaction.user}")
             except:
                 pass
-        # Puis supprimer la catégorie
         try:
             await categorie.delete(reason=f"Supprimé par {interaction.user}")
         except:
