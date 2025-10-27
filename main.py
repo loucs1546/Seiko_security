@@ -26,7 +26,7 @@ async def on_ready():
         "cogs.log_setup",  # ← Tu peux le garder ou le supprimer
         "cogs.config"      # ← Nouveau
     ]
-    
+    # test
     for cog in cog_paths:
         try:
             await bot.load_extension(cog)
