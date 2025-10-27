@@ -24,6 +24,20 @@ class LoggingCog(commands.Cog):
         await send_log(self.bot, "messages", embed)
 
     @commands.Cog.listener()
+    async def on_message_edit(self, before, after):
+        if not after.guild or after.guild.id != config.GUILD_ID or after.author.bot or before.content == after.content:
+            return
+        embed = discord.Embed(
+            title="✏️ Message édité",
+            description=f"Par {after.author.mention} dans {after.channel.mention}",
+            color=0xffff00,
+            timestamp=discord.utils.utcnow()
+        )
+        embed.add_field(name="Avant", value=before.content[:1020] or "*(vide)*", inline=False)
+        embed.add_field(name="Après", value=after.content[:1020] or "*(vide)*", inline=False)
+        await send_log(self.bot, "messages", embed)
+
+    @commands.Cog.listener()
     async def on_message_delete(self, message):
         if not message.guild or message.guild.id != config.GUILD_ID or message.author.bot:
             return
@@ -57,7 +71,6 @@ class LoggingCog(commands.Cog):
         if before.guild.id != config.GUILD_ID:
             return
 
-        # --- Pseudo ---
         if before.nick != after.nick:
             moderator = None
             try:
@@ -90,7 +103,16 @@ class LoggingCog(commands.Cog):
             embed.add_field(name="Après", value=new_nick, inline=True)
             await send_log(self.bot, "profile", embed)
 
-        # --- Rôles (inchangé, car fiable) ---
+        if before.avatar != after.avatar:
+            embed = discord.Embed(
+                title="🖼️ Avatar modifié",
+                description=f"{after.mention}",
+                color=0x00ccff,
+                timestamp=discord.utils.utcnow()
+            )
+            embed.set_thumbnail(url=after.display_avatar.url)
+            await send_log(self.bot, "profile", embed)
+
         before_roles = set(before.roles)
         after_roles = set(after.roles)
         if before_roles != after_roles:
@@ -106,8 +128,10 @@ class LoggingCog(commands.Cog):
             added = after_roles - before_roles
             removed = before_roles - after_roles
             desc = ""
-            if added: desc += "➕ Ajoutés : " + ", ".join(r.mention for r in added) + "\n"
-            if removed: desc += "➖ Retirés : " + ", ".join(r.mention for r in removed)
+            if added:
+                desc += "➕ Ajoutés : " + ", ".join(r.mention for r in added) + "\n"
+            if removed:
+                desc += "➖ Retirés : " + ", ".join(r.mention for r in removed)
             if desc:
                 embed = discord.Embed(
                     title="👑 Rôles modifiés",
@@ -122,7 +146,6 @@ class LoggingCog(commands.Cog):
         if member.guild.id != config.GUILD_ID:
             return
 
-        # --- Déplacement vocal ---
         if before.channel and after.channel and before.channel != after.channel:
             moderator = None
             try:
@@ -145,7 +168,6 @@ class LoggingCog(commands.Cog):
             )
             await send_log(self.bot, "vocal", embed)
 
-        # --- Mute / Deafen ---
         elif before.mute != after.mute or before.deaf != after.deaf:
             moderator = None
             try:
@@ -171,34 +193,6 @@ class LoggingCog(commands.Cog):
             embed = discord.Embed(
                 title="🎤 État vocal modifié",
                 description=description,
-                color=0x1abc9c,
-                timestamp=discord.utils.utcnow()
-            )
-            await send_log(self.bot, "vocal", embed)
-
-    @commands.Cog.listener()
-    async def on_voice_state_update(self, member, before, after):
-        if member.guild.id != config.GUILD_ID:
-            return
-
-        if before.channel and after.channel and before.channel != after.channel:
-            embed = discord.Embed(
-                title="🎤 Déplacement vocal",
-                description=f"{member.mention} : {before.channel.mention} → {after.channel.mention}",
-                color=0xffff00,
-                timestamp=discord.utils.utcnow()
-            )
-            await send_log(self.bot, "vocal", embed)
-
-        elif before.mute != after.mute or before.deaf != after.deaf:
-            actions = []
-            if before.mute != after.mute:
-                actions.append("mute vocal" if after.mute else "unmute vocal")
-            if before.deaf != after.deaf:
-                actions.append("sourdine" if after.deaf else "fin de sourdine")
-            embed = discord.Embed(
-                title="🎤 État vocal modifié",
-                description=f"{member.mention} — {', '.join(actions)}",
                 color=0x1abc9c,
                 timestamp=discord.utils.utcnow()
             )
