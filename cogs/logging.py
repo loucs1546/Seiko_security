@@ -23,7 +23,7 @@ class LoggingCog(commands.Cog):
             embed.add_field(name="📎 Pièces jointes", value=urls, inline=False)
         await send_log(self.bot, "messages", embed)
 
-     @commands.Cog.listener()
+    @commands.Cog.listener()
     async def on_message_delete(self, message):
         if not message.guild or message.guild.id != config.GUILD_ID or message.author.bot:
             return
