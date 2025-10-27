@@ -33,7 +33,7 @@ async def on_ready():
         except Exception as e:
             print(f"❌ Erreur : {e}")
 
-    # main.py — DANS LA FONCTION on_ready, remplace la sync par :
+    # main.py — DANS LA FONCTION on_ready, rempace la sync par :
 
     await asyncio.sleep(2)
     # SYNC GLOBALE (une seule fois)
