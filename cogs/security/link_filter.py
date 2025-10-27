@@ -43,15 +43,7 @@ class LinkFilterCog(commands.Cog):
         except Exception:
             pass
 
-        for url in urls:
-            embed = discord.Embed(
-                title="⚠️ Lien suspect détecté",
-                description=f"Par {message.author.mention} dans {message.channel.mention}",
-                color=0xff6600,
-                timestamp=discord.utils.utcnow()
-            )
-            embed.add_field(name="URL", value=url[:1020])
-            await send_log(self.bot, "content", embed)
+        # On ne logue plus ici (déjà fait ci-dessus)
 
 async def setup(bot):
     await bot.add_cog(LinkFilterCog(bot))
