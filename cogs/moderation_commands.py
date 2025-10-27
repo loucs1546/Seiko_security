@@ -34,16 +34,18 @@ class ModerationCommandsCog(commands.Cog):
     @discord.app_commands.describe(categorie="Catégorie à supprimer")
     @discord.app_commands.checks.has_permissions(manage_channels=True)
     async def delete_categorie(self, interaction: discord.Interaction, categorie: discord.CategoryChannel):
-        # ✅ Réponse immédiate
+        # ✅ Réponse immédiate pour éviter l'erreur 10008
         await interaction.response.send_message(
             f"✅ Suppression de la catégorie **{categorie.name}** en cours...",
             ephemeral=True
         )
+        # Supprimer les salons d'abord
         for channel in categorie.channels:
             try:
                 await channel.delete(reason=f"Supprimé avec la catégorie par {interaction.user}")
             except:
                 pass
+        # Puis supprimer la catégorie
         try:
             await categorie.delete(reason=f"Supprimé par {interaction.user}")
         except:
@@ -71,8 +73,9 @@ class ModerationCommandsCog(commands.Cog):
             color=0xff9900,
             timestamp=discord.utils.utcnow()
         )
-        ch = get_sanction_channel(self.bot)
-        if ch: await ch.send(embed=embed)
+        sanction_ch = get_sanction_channel(self.bot)
+        if sanction_ch:
+            await sanction_ch.send(embed=embed)
         await interaction.response.send_message(f"✅ {pseudo.mention} expulsé.", ephemeral=True)
 
     @discord.app_commands.command(name="ban", description="Bannit un membre")
@@ -90,8 +93,9 @@ class ModerationCommandsCog(commands.Cog):
             color=0xff0000,
             timestamp=discord.utils.utcnow()
         )
-        ch = get_sanction_channel(self.bot)
-        if ch: await ch.send(embed=embed)
+        sanction_ch = get_sanction_channel(self.bot)
+        if sanction_ch:
+            await sanction_ch.send(embed=embed)
         await interaction.response.send_message(f"✅ {pseudo.mention} banni.", ephemeral=True)
 
     @discord.app_commands.command(name="warn", description="Avertit un membre")
@@ -104,8 +108,9 @@ class ModerationCommandsCog(commands.Cog):
             color=0xffff00,
             timestamp=discord.utils.utcnow()
         )
-        ch = get_sanction_channel(self.bot)
-        if ch: await ch.send(embed=embed)
+        sanction_ch = get_sanction_channel(self.bot)
+        if sanction_ch:
+            await sanction_ch.send(embed=embed)
         await interaction.response.send_message(f"✅ Avertissement envoyé pour {pseudo.mention}.", ephemeral=True)
 
 async def setup(bot):
