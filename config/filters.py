@@ -138,3 +138,4 @@ def est_url_suspecte(url: str) -> bool:
         if mot in url_min:
             return True
     return False
+#dzq
