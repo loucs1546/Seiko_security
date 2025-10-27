@@ -1,4 +1,4 @@
-# cogs/config.py
+# cogs/config.py (version complète)
 import discord
 from discord.ext import commands
 import core_config as config
@@ -13,76 +13,145 @@ class ConfigCog(commands.Cog):
             await interaction.response.send_message("❌ Réservé aux administrateurs.", ephemeral=True)
             return
 
-        embed = self.get_security_embed()
-        view = SecurityConfigView(self.bot)
+        embed = discord.Embed(
+            title="🔧 Configuration de CyberWatch",
+            description="Choisissez une section à configurer :",
+            color=0x3498db
+        )
+        view = MainConfigView(self.bot)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-    def get_security_embed(self):
-        anti_spam = config.CONFIG["security"]["anti_spam"]
-        anti_raid = config.CONFIG["security"]["anti_raid"]
-        anti_hack = config.CONFIG["security"]["anti_hack"]
+class MainConfigView(discord.ui.View):
+    def __init__(self, bot):
+        super().__init__(timeout=600)
+        self.bot = bot
 
-        status = {True: "✅ **Activé**", False: "❌ **Désactivé**"}
+    @discord.ui.button(label="🛡️ Sécurité", style=discord.ButtonStyle.primary)
+    async def security(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = SecurityConfigView.get_embed()
+        await interaction.response.edit_message(embed=embed, view=SecurityConfigView(self.bot))
 
+    @discord.ui.button(label="📜 Logs", style=discord.ButtonStyle.secondary)
+    async def logs(self, interaction: discord.Interaction, button: discord.ui.Button):
         embed = discord.Embed(
-            title="🛡️ Configuration de la Sécurité",
-            description="Cliquez sur les boutons pour basculer l'état.",
-            color=0x2ecc71,
-            timestamp=discord.utils.utcnow()
+            title="📜 Configuration des Logs",
+            description="Choisissez une option :",
+            color=0x2ecc71
         )
-        embed.add_field(name="🤖 Anti-Spam", value=status[anti_spam], inline=False)
-        embed.add_field(name="👥 Anti-Raid", value=status[anti_raid], inline=False)
-        embed.add_field(name="🕵️ Anti-Hack", value=status[anti_hack], inline=False)
-        embed.set_footer(text="CyberWatch • Sécurité en temps réel")
-        return embed
+        view = LogsConfigView(self.bot)
+        await interaction.response.edit_message(embed=embed, view=view)
 
 class SecurityConfigView(discord.ui.View):
     def __init__(self, bot):
         super().__init__(timeout=600)
         self.bot = bot
 
-    async def toggle_and_run(self, interaction: discord.Interaction, setting: str, command_name: str):
-        current = config.CONFIG["security"][setting]
-        new_value = not current
-        config.CONFIG["security"][setting] = new_value
+    @staticmethod
+    def get_embed():
+        s = config.CONFIG["security"]
+        status = lambda x: "✅ **Activé**" if x else "❌ **Désactivé**"
+        embed = discord.Embed(
+            title="🛡️ Sécurité",
+            description="Cliquez pour basculer l'état.",
+            color=0xe74c3c
+        )
+        embed.add_field(name="🤖 Anti-Spam", value=status(s["anti_spam"]), inline=False)
+        embed.add_field(name="👥 Anti-Raid", value=status(s["anti_raid"]), inline=False)
+        embed.add_field(name="🕵️ Anti-Hack", value=status(s["anti_hack"]), inline=False)
+        return embed
 
-        # Appeler la commande réelle
+    async def toggle(self, interaction: discord.Interaction, key: str, cmd_name: str):
         cog = self.bot.get_cog("ModerationCommandsCog")
-        if cog:
-            cmd = getattr(cog, command_name, None)
-            if cmd:
-                # Créer une fausse interaction avec le booléen
-                class FakeInteraction:
-                    def __init__(self, orig, val):
-                        self._orig = orig
-                        self.value = val
-                    def __getattr__(self, name):
-                        return getattr(self._orig, name)
-                    async def response(self):
-                        return self
-                    async def send_message(self, *args, **kwargs):
-                        pass
-                    async def defer(self, **kwargs):
-                        pass
+        if not cog: return
+        cmd = getattr(cog, cmd_name, None)
+        if not cmd: return
 
-                fake = FakeInteraction(interaction, new_value)
-                await cmd(fake)
+        new_val = not config.CONFIG["security"][key]
+        fake = type('obj', (object,), {
+            'value': new_val,
+            'response': lambda: type('obj', (), {'send_message': lambda *a, **k: None})(),
+            '__getattr__': lambda _, name: getattr(interaction, name)
+        })()
 
-        # Mettre à jour l'embed
-        embed = ConfigCog(self.bot).get_security_embed()
-        await interaction.response.edit_message(embed=embed, view=self)
+        config.CONFIG["security"][key] = new_val
+        await cmd(fake)
+
+        await interaction.response.edit_message(embed=self.get_embed(), view=self)
 
     @discord.ui.button(label="Anti-Spam", emoji="🤖", style=discord.ButtonStyle.secondary)
-    async def anti_spam_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.toggle_and_run(interaction, "anti_spam", "anti_spam")
+    async def btn_spam(self, interaction, button):
+        await self.toggle(interaction, "anti_spam", "anti_spam")
 
     @discord.ui.button(label="Anti-Raid", emoji="👥", style=discord.ButtonStyle.secondary)
-    async def anti_raid_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.toggle_and_run(interaction, "anti_raid", "anti_raid")
+    async def btn_raid(self, interaction, button):
+        await self.toggle(interaction, "anti_raid", "anti_raid")
 
     @discord.ui.button(label="Anti-Hack", emoji="🕵️", style=discord.ButtonStyle.secondary)
-    async def anti_hack_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.toggle_and_run(interaction, "anti_hack", "anti_hack")
+    async def btn_hack(self, interaction, button):
+        await self.toggle(interaction, "anti_hack", "anti_hack")
+
+    @discord.ui.button(label="⬅️ Retour", style=discord.ButtonStyle.danger)
+    async def back(self, interaction, button):
+        embed = discord.Embed(
+            title="🔧 Configuration de CyberWatch",
+            description="Choisissez une section :",
+            color=0x3498db
+        )
+        await interaction.response.edit_message(embed=embed, view=MainConfigView(self.bot))
+
+class LogsConfigView(discord.ui.View):
+    def __init__(self, bot):
+        super().__init__(timeout=600)
+        self.bot = bot
+
+    @discord.ui.button(label="🆕 Créer les salons", style=discord.ButtonStyle.success)
+    async def create_logs(self, interaction: discord.Interaction, button: discord.ui.Button):
+        guild = interaction.guild
+        for cat in guild.categories:
+            if "log" in cat.name.lower() or "surveillance" in cat.name.lower():
+                await interaction.response.send_message(f"❌ Catégorie existante : **{cat.name}**", ephemeral=True)
+                return
+
+        try:
+            cat = await guild.create_category(
+                name="🔐・Surveillance",
+                overwrites={
+                    guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                    guild.me: discord.PermissionOverwrite(read_messages=True)
+                }
+            )
+            mapping = [
+                ("📜・messages", "messages"),
+                ("🎤・vocal", "vocal"),
+                ("🛠️・commandes", "commands"),
+                ("👑・rôles", "roles"),
+                ("📛・profil", "profile"),
+                ("🔍・contenu", "content"),
+                ("⚖️・sanctions", "sanctions")
+            ]
+            for name, key in mapping:
+                ch = await guild.create_text_channel(name=name, category=cat)
+                config.CONFIG["logs"][key] = ch.id
+            await interaction.response.send_message(f"✅ {len(mapping)} salons créés dans **{cat.name}**.", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Erreur : {e}", ephemeral=True)
+
+    @discord.ui.button(label="⚙️ Définir manuellement", style=discord.ButtonStyle.secondary)
+    async def define_logs(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(
+            "📝 Utilisez `/add-cat-log` pour définir les salons manuellement.\n"
+            "Ou créez les salons vous-même et mettez à jour `core_config.py`.",
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="⬅️ Retour", style=discord.ButtonStyle.danger)
+    async def back(self, interaction, button):
+        embed = discord.Embed(
+            title="🔧 Configuration de CyberWatch",
+            description="Choisissez une section :",
+            color=0x3498db
+        )
+        await interaction.response.edit_message(embed=embed, view=MainConfigView(self.bot))
 
 async def setup(bot):
     await bot.add_cog(ConfigCog(bot))

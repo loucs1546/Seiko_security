@@ -20,12 +20,13 @@ async def on_ready():
         "cogs.security.antispam",
         "cogs.security.content_filter",
         "cogs.security.link_filter",
-        "cogs.moderation",
-        "cogs.moderation_commands",
+        "cogs.moderation_commands",  # ← Contient TOUTES les commandes + /reachlog
         "cogs.tickets",
-        "cogs.config"  # ← Ajouté
+        "cogs.config"  # ← Interface complète
     ]
+
     # test
+    
     for cog in cog_paths:
         try:
             await bot.load_extension(cog)

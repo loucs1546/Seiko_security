@@ -11,26 +11,26 @@ class ModerationCommandsCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    # === COMMANDES DE SÉCURITÉ (modifiées) ===
+    # === SÉCURITÉ (inchangé) ===
     @discord.app_commands.command(name="anti-spam", description="Active/désactive l'anti-spam")
     @discord.app_commands.checks.has_permissions(administrator=True)
     async def anti_spam(self, interaction: discord.Interaction, actif: bool):
-        config.CONFIG["security"]["anti_spam"] = actif  # ← Ligne ajoutée
+        config.CONFIG["security"]["anti_spam"] = actif
         await interaction.response.send_message(f"✅ Anti-spam {'activé' if actif else 'désactivé'}.", ephemeral=True)
 
     @discord.app_commands.command(name="anti-raid", description="Active/désactive l'anti-raid")
     @discord.app_commands.checks.has_permissions(administrator=True)
     async def anti_raid(self, interaction: discord.Interaction, actif: bool):
-        config.CONFIG["security"]["anti_raid"] = actif  # ← Ligne ajoutée
+        config.CONFIG["security"]["anti_raid"] = actif
         await interaction.response.send_message(f"✅ Anti-raid {'activé' if actif else 'désactivé'}.", ephemeral=True)
 
     @discord.app_commands.command(name="anti-hack", description="Active/désactive l'anti-hack")
     @discord.app_commands.checks.has_permissions(administrator=True)
     async def anti_hack(self, interaction: discord.Interaction, actif: bool):
-        config.CONFIG["security"]["anti_hack"] = actif  # ← Ligne ajoutée
+        config.CONFIG["security"]["anti_hack"] = actif
         await interaction.response.send_message(f"✅ Anti-hack {'activé' if actif else 'désactivé'}.", ephemeral=True)
 
-    # === AUTRES COMMANDES (inchangées) ===
+    # === COMMANDES DE MODÉRATION (toutes restaurées) ===
     @discord.app_commands.command(name="ping", description="Affiche la latence du bot")
     async def ping(self, interaction: discord.Interaction):
         latency = round(self.bot.latency * 1000)
@@ -129,6 +129,23 @@ class ModerationCommandsCog(commands.Cog):
         if sanction_ch:
             await sanction_ch.send(embed=embed)
         await interaction.response.send_message(f"✅ Avertissement envoyé pour {pseudo.mention}.", ephemeral=True)
+
+    # === NOUVELLE COMMANDE : /reachlog ===
+    @discord.app_commands.command(name="reachlog", description="Affiche le dernier log d'audit du serveur")
+    @discord.app_commands.checks.has_permissions(administrator=True)
+    async def reachlog(self, interaction: discord.Interaction):
+        try:
+            async for entry in interaction.guild.audit_logs(limit=1):
+                log_msg = f"**{entry.action.name}**\n"
+                log_msg += f"**Cible** : {entry.target}\n"
+                log_msg += f"**Auteur** : {entry.user}\n"
+                log_msg += f"**Raison** : {entry.reason or 'Aucune'}\n"
+                log_msg += f"**Date** : <t:{int(entry.created_at.timestamp())}:R>"
+                await interaction.response.send_message(log_msg, ephemeral=True)
+                return
+            await interaction.response.send_message("📭 Aucun log d'audit trouvé.", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Erreur : {str(e)}", ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(ModerationCommandsCog(bot))
