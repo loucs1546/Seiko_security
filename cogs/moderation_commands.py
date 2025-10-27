@@ -34,26 +34,21 @@ class ModerationCommandsCog(commands.Cog):
     @discord.app_commands.describe(categorie="Catégorie à supprimer")
     @discord.app_commands.checks.has_permissions(manage_channels=True)
     async def delete_categorie(self, interaction: discord.Interaction, categorie: discord.CategoryChannel):
-        # ✅ Répondre IMMÉDIATEMENT
+        # ✅ Réponse immédiate
         await interaction.response.send_message(
             f"✅ Suppression de la catégorie **{categorie.name}** en cours...",
             ephemeral=True
         )
-        
-        # Supprimer les salons
         for channel in categorie.channels:
             try:
                 await channel.delete(reason=f"Supprimé avec la catégorie par {interaction.user}")
             except:
-                pass  # Ignore les erreurs (ex: salon déjà supprimé)
-
-        # Supprimer la catégorie
+                pass
         try:
             await categorie.delete(reason=f"Supprimé par {interaction.user}")
         except:
             pass
 
-    # ✅ Pas de followup → pas d'erreur
     @discord.app_commands.command(name="say", description="Envoie un message dans un salon")
     @discord.app_commands.describe(salon="Salon cible", contenu="Message à envoyer")
     @discord.app_commands.checks.has_permissions(manage_messages=True)
