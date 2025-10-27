@@ -1,4 +1,4 @@
-# cogs/config.py (version complète)
+# cogs/config.py
 import discord
 from discord.ext import commands
 import core_config as config
@@ -60,35 +60,23 @@ class SecurityConfigView(discord.ui.View):
         embed.add_field(name="🕵️ Anti-Hack", value=status(s["anti_hack"]), inline=False)
         return embed
 
-    async def toggle(self, interaction: discord.Interaction, key: str, cmd_name: str):
-        cog = self.bot.get_cog("ModerationCommandsCog")
-        if not cog: return
-        cmd = getattr(cog, cmd_name, None)
-        if not cmd: return
-
-        new_val = not config.CONFIG["security"][key]
-        fake = type('obj', (object,), {
-            'value': new_val,
-            'response': lambda: type('obj', (), {'send_message': lambda *a, **k: None})(),
-            '__getattr__': lambda _, name: getattr(interaction, name)
-        })()
-
-        config.CONFIG["security"][key] = new_val
-        await cmd(fake)
-
-        await interaction.response.edit_message(embed=self.get_embed(), view=self)
+    async def toggle(self, interaction: discord.Interaction, key: str):
+        current = config.CONFIG["security"][key]
+        config.CONFIG["security"][key] = not current
+        embed = self.get_embed()
+        await interaction.response.edit_message(embed=embed, view=self)
 
     @discord.ui.button(label="Anti-Spam", emoji="🤖", style=discord.ButtonStyle.secondary)
     async def btn_spam(self, interaction, button):
-        await self.toggle(interaction, "anti_spam", "anti_spam")
+        await self.toggle(interaction, "anti_spam")
 
     @discord.ui.button(label="Anti-Raid", emoji="👥", style=discord.ButtonStyle.secondary)
     async def btn_raid(self, interaction, button):
-        await self.toggle(interaction, "anti_raid", "anti_raid")
+        await self.toggle(interaction, "anti_raid")
 
     @discord.ui.button(label="Anti-Hack", emoji="🕵️", style=discord.ButtonStyle.secondary)
     async def btn_hack(self, interaction, button):
-        await self.toggle(interaction, "anti_hack", "anti_hack")
+        await self.toggle(interaction, "anti_hack")
 
     @discord.ui.button(label="⬅️ Retour", style=discord.ButtonStyle.danger)
     async def back(self, interaction, button):
@@ -135,14 +123,6 @@ class LogsConfigView(discord.ui.View):
             await interaction.response.send_message(f"✅ {len(mapping)} salons créés dans **{cat.name}**.", ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(f"❌ Erreur : {e}", ephemeral=True)
-
-    @discord.ui.button(label="⚙️ Définir manuellement", style=discord.ButtonStyle.secondary)
-    async def define_logs(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message(
-            "📝 Utilisez `/add-cat-log` pour définir les salons manuellement.\n"
-            "Ou créez les salons vous-même et mettez à jour `core_config.py`.",
-            ephemeral=True
-        )
 
     @discord.ui.button(label="⬅️ Retour", style=discord.ButtonStyle.danger)
     async def back(self, interaction, button):
