@@ -112,6 +112,16 @@ class LoggingCog(commands.Cog):
         if member.guild.id != config.GUILD_ID:
             return
 
+        # Fonction pour obtenir l'auteur d'une action depuis les logs d'audit
+        async def get_audit_author(guild, target_id, action_type, max_age_seconds=10):
+            try:
+                async for entry in guild.audit_logs(action=action_type, limit=10):
+                    if entry.target.id == target_id and (discord.utils.utcnow() - entry.created_at).total_seconds() < max_age_seconds:
+                        return entry.user
+            except Exception:
+                pass
+            return None
+
         # --- Connexion ---
         if before.channel is None and after.channel is not None:
             embed = discord.Embed(
@@ -124,15 +134,7 @@ class LoggingCog(commands.Cog):
 
         # --- Déconnexion ---
         elif before.channel is not None and after.channel is None:
-            moderator = None
-            try:
-                async for entry in member.guild.audit_logs(limit=5, action=discord.AuditLogAction.member_disconnect):
-                    if entry.target.id == member.id and (discord.utils.utcnow() - entry.created_at).total_seconds() < 10:
-                        moderator = entry.user
-                        break
-            except:
-                pass
-
+            moderator = await get_audit_author(member.guild, member.id, discord.AuditLogAction.member_disconnect)
             fait_par = moderator.mention if moderator else member.mention
             embed = discord.Embed(
                 title="🎤 Déconnexion vocale",
@@ -144,15 +146,7 @@ class LoggingCog(commands.Cog):
 
         # --- Déplacement ---
         elif before.channel and after.channel and before.channel != after.channel:
-            moderator = None
-            try:
-                async for entry in member.guild.audit_logs(limit=5, action=discord.AuditLogAction.member_move):
-                    if entry.target.id == member.id and (discord.utils.utcnow() - entry.created_at).total_seconds() < 10:
-                        moderator = entry.user
-                        break
-            except:
-                pass
-
+            moderator = await get_audit_author(member.guild, member.id, discord.AuditLogAction.member_move)
             fait_par = moderator.mention if moderator else member.mention
             embed = discord.Embed(
                 title="🎤 Déplacement vocal",
@@ -164,24 +158,13 @@ class LoggingCog(commands.Cog):
 
         # --- Mute / Deafen ---
         elif before.mute != after.mute or before.deaf != after.deaf:
-            moderator = None
-            try:
-                async for entry in member.guild.audit_logs(limit=5, action=discord.AuditLogAction.member_update):
-                    if entry.target.id == member.id and (discord.utils.utcnow() - entry.created_at).total_seconds() < 10:
-                        if (before.mute != after.mute and getattr(entry.changes, 'mute', None)) or \
-                        (before.deaf != after.deaf and getattr(entry.changes, 'deaf', None)):
-                            moderator = entry.user
-                            break
-            except:
-                pass
-
+            moderator = await get_audit_author(member.guild, member.id, discord.AuditLogAction.member_update)
+            fait_par = moderator.mention if moderator else "Inconnu"
             actions = []
             if before.mute != after.mute:
                 actions.append("mute vocal" if after.mute else "unmute vocal")
             if before.deaf != after.deaf:
                 actions.append("sourdine" if after.deaf else "fin de sourdine")
-
-            fait_par = moderator.mention if moderator else "Inconnu"
             embed = discord.Embed(
                 title="🎤 État vocal modifié",
                 description=f"{member.mention} — {', '.join(actions)}\n**Fait par** : {fait_par}",
