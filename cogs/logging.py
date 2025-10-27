@@ -37,6 +37,25 @@ class LoggingCog(commands.Cog):
         embed.add_field(name="Après", value=after.content[:1020] or "*(vide)*", inline=False)
         await send_log(self.bot, "messages", embed)
 
+    async def _dump_recent_audit_entries(self, guild, limit=12):
+        """Utilitaire de debug : renvoie une liste d'info sur les dernières entrées d'audit"""
+        rows = []
+        try:
+            async for entry in guild.audit_logs(limit=limit):
+                extra = getattr(entry, "extra", None)
+                rows.append({
+                    "action": getattr(entry.action, "name", str(entry.action)),
+                    "user": getattr(entry.user, "id", None),
+                    "user_name": getattr(entry.user, "name", None) if entry.user else None,
+                    "target": getattr(entry.target, "id", None) if entry.target else None,
+                    "target_repr": repr(entry.target),
+                    "created_at": entry.created_at.isoformat() if entry.created_at else None,
+                    "extra": repr(extra)
+                })
+        except Exception as e:
+            rows.append({"error": repr(e)})
+        return rows
+
     @commands.Cog.listener()
     async def on_message_delete(self, message):
         if not message.guild or message.guild.id != config.GUILD_ID or message.author.bot:
@@ -44,40 +63,58 @@ class LoggingCog(commands.Cog):
 
         deleter = None
         try:
-            # Cherche d'abord des entrées message_delete
-            async for entry in message.guild.audit_logs(limit=10, action=discord.AuditLogAction.message_delete):
-                # entry.target peut être l'utilisateur dont le message a été supprimé
-                if entry.target and getattr(entry.target, "id", None) == message.author.id:
-                    extra = getattr(entry, "extra", None)
-                    channel = getattr(extra, "channel", None)
-                    if channel and channel.id != message.channel.id:
-                        continue
-                    if (discord.utils.utcnow() - entry.created_at).total_seconds() < 6:
-                        deleter = entry.user
-                        break
+            # Cherche des entrées message_delete
+            async for entry in message.guild.audit_logs(limit=50, action=discord.AuditLogAction.message_delete):
+                # Plusieurs possibilités selon la structure :
+                # - entry.target peut être l'utilisateur dont le message a été supprimé
+                # - entry.extra peut contenir le channel, count, voire le message id selon la version de discord/discord.py
+                target_id = getattr(entry.target, "id", None) if entry.target else None
+                extra = getattr(entry, "extra", None)
+                extra_channel = getattr(extra, "channel", None) if extra else None
+                # Tentatives de matching :
+                match_author = (target_id == message.author.id)
+                match_channel = (extra_channel and getattr(extra_channel, "id", None) == message.channel.id)
+                # Certaines implémentations fournissent un message_id dans extra
+                extra_message_id = getattr(extra, "message_id", None) if extra else None
+                match_message_id = (extra_message_id == message.id) if extra_message_id else False
 
-            # Si rien trouvé, vérifier les suppressions en masse (bulk)
+                age = (discord.utils.utcnow() - entry.created_at).total_seconds() if entry.created_at else 9999
+                if (match_author or match_channel or match_message_id) and age < 30:
+                    deleter = entry.user
+                    break
+
+            # Si pas trouvé, tenter message_bulk_delete
             if deleter is None:
-                async for entry in message.guild.audit_logs(limit=10, action=discord.AuditLogAction.message_bulk_delete):
+                async for entry in message.guild.audit_logs(limit=20, action=discord.AuditLogAction.message_bulk_delete):
                     extra = getattr(entry, "extra", None)
-                    channel = getattr(extra, "channel", None)
-                    if channel and channel.id == message.channel.id and (discord.utils.utcnow() - entry.created_at).total_seconds() < 6:
+                    extra_channel = getattr(extra, "channel", None) if extra else None
+                    count = getattr(extra, "count", None) if extra else None
+                    age = (discord.utils.utcnow() - entry.created_at).total_seconds() if entry.created_at else 9999
+                    if extra_channel and getattr(extra_channel, "id", None) == message.channel.id and age < 30:
                         deleter = entry.user
                         break
 
         except discord.Forbidden:
-            # Permission manquante : VIEW_AUDIT_LOG
+            # Pas la permission VIEW_AUDIT_LOG (ou bot limité) — on garde deleter = None
             deleter = None
         except Exception:
-            # Ne pas échouer si audit_logs plante pour une raison inattendue
+            # Ne pas tout casser en prod
             deleter = None
 
         if deleter is None:
-            # Si on n'a pas pu déterminer le modérateur, indiquer clairement pourquoi possible
+            # Si on n'a pas trouvé, dump les dernières entrées d'audit dans la console / log pour debug.
+            dump = await self._dump_recent_audit_entries(message.guild, limit=12)
+            # Envoie le dump dans la console (ou dans un salon de debug si tu préfères)
+            self.bot.logger = getattr(self.bot, "logger", None)
+            if self.bot.logger:
+                self.bot.logger.warning("Audit dump for message_delete: %s", dump)
+            else:
+                print("Audit dump for message_delete:", dump)
+
             description = (
                 f"**Auteur** : {message.author.mention}\n"
                 f"**Salon** : {message.channel.mention}\n"
-                f"**Supprimé par** : Inconnu (vérifie la permission 'View Audit Log' du bot ou délai de détection)"
+                f"**Supprimé par** : Inconnu (voir debug audit dump dans la console ou log)"
             )
         else:
             description = (
