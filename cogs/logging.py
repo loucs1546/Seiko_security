@@ -8,8 +8,7 @@ class LoggingCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    # === Fonction utilitaire : récupère l'auteur depuis les logs d'audit ===
-    async def get_audit_author(self, guild, target_id, action_type, max_age_seconds=10):
+    async def get_audit_author(self, guild, target_id, action_type, max_age_seconds=15):
         try:
             async for entry in guild.audit_logs(action=action_type, limit=10):
                 if entry.target.id == target_id and (discord.utils.utcnow() - entry.created_at).total_seconds() < max_age_seconds:
@@ -18,7 +17,28 @@ class LoggingCog(commands.Cog):
             pass
         return None
 
-    # === MESSAGES (inchangés) ===
+    async def get_voice_action_author(self, guild, target_id, max_age_seconds=15):
+        """Récupère l'auteur d'une action vocale (déplacement, déconnexion) en vérifiant plusieurs types de logs."""
+        try:
+            async for entry in guild.audit_logs(limit=10):
+                if entry.target.id != target_id:
+                    continue
+                if (discord.utils.utcnow() - entry.created_at).total_seconds() > max_age_seconds:
+                    continue
+                # Vérifie les actions vocales connues
+                if entry.action in (
+                    discord.AuditLogAction.member_disconnect,
+                    discord.AuditLogAction.member_move
+                ):
+                    return entry.user
+                # Vérifie aussi member_update avec changement de salon vocal (cas rare)
+                if entry.action == discord.AuditLogAction.member_update:
+                    if hasattr(entry.changes, 'channel_id'):
+                        return entry.user
+        except Exception:
+            pass
+        return None
+
     @commands.Cog.listener()
     async def on_message(self, message):
         if not message.guild or message.guild.id != config.GUILD_ID or message.author.id == self.bot.user.id:
@@ -62,7 +82,6 @@ class LoggingCog(commands.Cog):
             embed.add_field(name="Contenu", value=message.content[:1020], inline=False)
         await send_log(self.bot, "messages", embed)
 
-    # === CHANGEMENT DE PSEUDO (avec "Fait par") ===
     @commands.Cog.listener()
     async def on_member_update(self, before, after):
         if before.guild.id != config.GUILD_ID:
@@ -126,7 +145,6 @@ class LoggingCog(commands.Cog):
                 )
                 await send_log(self.bot, "roles", embed)
 
-    # === ÉVÉNEMENTS VOCAUX (avec "Fait par") ===
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
         if member.guild.id != config.GUILD_ID:
@@ -144,12 +162,7 @@ class LoggingCog(commands.Cog):
 
         # --- Déconnexion ---
         elif before.channel is not None and after.channel is None:
-            moderator = await self.get_audit_author(
-                member.guild,
-                member.id,
-                discord.AuditLogAction.member_disconnect,
-                max_age_seconds=15
-            )
+            moderator = await self.get_voice_action_author(member.guild, member.id)
             fait_par = moderator.mention if moderator else member.mention
             embed = discord.Embed(
                 title="🎤 Déconnexion vocale",
@@ -161,12 +174,7 @@ class LoggingCog(commands.Cog):
 
         # --- Déplacement ---
         elif before.channel and after.channel and before.channel != after.channel:
-            moderator = await self.get_audit_author(
-                member.guild,
-                member.id,
-                discord.AuditLogAction.member_move,
-                max_age_seconds=15
-            )
+            moderator = await self.get_voice_action_author(member.guild, member.id)
             fait_par = moderator.mention if moderator else member.mention
             embed = discord.Embed(
                 title="🎤 Déplacement vocal",
@@ -198,7 +206,6 @@ class LoggingCog(commands.Cog):
             )
             await send_log(self.bot, "vocal", embed)
 
-    # === COMMANDES (inchangé) ===
     @commands.Cog.listener()
     async def on_interaction(self, interaction: discord.Interaction):
         if not interaction.guild or interaction.guild.id != config.GUILD_ID or interaction.type != discord.InteractionType.application_command:
