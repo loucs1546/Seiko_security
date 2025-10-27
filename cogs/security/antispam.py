@@ -2,7 +2,6 @@
 import discord
 from discord.ext import commands
 import core_config as config
-from utils.logging import send_log
 from collections import defaultdict
 import time
 from config.filters import WHITELISTED_PHRASES
@@ -15,6 +14,9 @@ class AntiSpamCog(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot or not message.guild or message.guild.id != config.GUILD_ID:
+            return
+
+        if not config.CONFIG["security"]["anti_spam"]:
             return
 
         clean_content = message.content.strip().lower()
@@ -34,7 +36,6 @@ class AntiSpamCog(commands.Cog):
             if is_repetitive or is_short:
                 try:
                     await message.delete()
-                    # ✅ Loguer ICI, avec "Supprimé par : CyberWatch (bot)"
                     embed = discord.Embed(
                         title="🗑️ Message supprimé (anti-spam)",
                         description=f"**Auteur** : {message.author.mention}\n"
@@ -45,6 +46,7 @@ class AntiSpamCog(commands.Cog):
                     )
                     if message.content:
                         embed.add_field(name="Contenu", value=message.content[:1020], inline=False)
+                    from utils.logging import send_log
                     await send_log(self.bot, "messages", embed)
 
                     await message.channel.send(

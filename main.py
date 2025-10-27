@@ -23,7 +23,8 @@ async def on_ready():
         "cogs.moderation",
         "cogs.moderation_commands",
         "cogs.tickets",
-        "cogs.log_setup"
+        "cogs.log_setup",  # ← Tu peux le garder ou le supprimer
+        "cogs.config"      # ← Nouveau
     ]
     
     for cog in cog_paths:
