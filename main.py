@@ -34,7 +34,7 @@ async def on_ready():
 
     await asyncio.sleep(2)
 
-    # 🔁 SYNCHRONISATION POUR TON SERVEUR
+    # 🔁 SYNCHRONISATION POUR TON SERVEUR (instantané)
     try:
         guild = discord.Object(id=config.GUILD_ID)
         synced = await bot.tree.sync(guild=guild)
@@ -42,7 +42,7 @@ async def on_ready():
     except Exception as e:
         print(f"❌ Erreur : {e}")
 
-# === NOUVELLES COMMANDES (comme les anciennes) ===
+# === COMMANDES SLASH (comme /ping, /kick, etc.) ===
 
 @bot.tree.command(name="logs", description="Définit le salon pour un type de log")
 @discord.app_commands.describe(type="Type de log", salon="Salon de destination")
