@@ -76,5 +76,8 @@ async def scan_deleted(interaction: discord.Interaction):
         await send_log_to(bot, "messages", embed)
         count += 1
     await interaction.followup.send(f"✅ {count} suppressions récupérées.", ephemeral=True)
+@bot.tree.command(name="test", description="Test de synchronisation") 
+async def test_cmd(interaction: discord.Interaction):
+    await interaction.response.send_message("✅ Test réussi !", ephemeral=True)
 
 bot.run(config.DISCORD_TOKEN)
