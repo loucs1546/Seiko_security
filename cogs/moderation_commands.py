@@ -2,7 +2,8 @@
 import discord
 from discord.ext import commands
 import core_config as config
-from utils.logging import send_log
+from utils.logging import send_log_to
+
 
 def get_sanction_channel(bot):
     return bot.get_channel(config.CONFIG["logs"].get("sanctions"))

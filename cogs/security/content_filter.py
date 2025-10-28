@@ -3,7 +3,7 @@ import discord
 from discord.ext import commands
 import core_config as config
 from config.filters import est_contenu_suspect
-from utils.logging import send_log
+from utils.logging import send_log_to  # ← send_log_to
 
 class ContentFilterCog(commands.Cog):
     def __init__(self, bot):
@@ -23,7 +23,7 @@ class ContentFilterCog(commands.Cog):
             )
             embed.add_field(name="Raison", value="Contenu suspect détecté", inline=False)
             embed.add_field(name="Extrait", value=message.content[:100], inline=False)
-            await send_log(self.bot, "content", embed)
+            await send_log_to(self.bot, "securite", embed)  # ← send_log_to
 
 async def setup(bot):
     await bot.add_cog(ContentFilterCog(bot))
