@@ -32,14 +32,10 @@ async def on_ready():
         except Exception as e:
             print(f"❌ Erreur : {e}")
 
+    # main.py — dans on_ready()
     await asyncio.sleep(1)
-
-    # 🔁 SYNCHRONISATION POUR TON SERVEUR (instantané)
-    try:
-        guild = discord.Object(id=config.GUILD_ID)
-        synced = await bot.tree.sync(guild=guild)
-        print(f"✅ {len(synced)} commandes synchronisées : {[c.name for c in synced]}")
-    except Exception as e:
-        print(f"❌ Erreur de synchronisation : {e}")
+    guild = discord.Object(id=config.GUILD_ID)
+    synced = await bot.tree.sync(guild=guild)  # ← PAS bot.tree.sync()
+    print(f"✅ {len(synced)} commandes : {[c.name for c in synced]}")
 
 bot.run(config.DISCORD_TOKEN)

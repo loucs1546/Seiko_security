@@ -94,10 +94,19 @@ class LogsConfigView(discord.ui.View):
 
     @discord.ui.button(label="🆕 Créer les salons", style=discord.ButtonStyle.success)
     async def create_logs(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # ✅ Répondre IMMÉDIATEMENT
+        await interaction.response.send_message(
+            "✅ Création des salons de logs en cours...",
+            ephemeral=True
+        )
+        
         guild = interaction.guild
         for cat in guild.categories:
             if "log" in cat.name.lower() or "surveillance" in cat.name.lower():
-                await interaction.response.send_message(f"❌ Catégorie existante : **{cat.name}**", ephemeral=True)
+                await interaction.followup.send(
+                    f"❌ Une catégorie de logs existe déjà : **{cat.name}**",
+                    ephemeral=True
+                )
                 return
 
         try:
@@ -120,9 +129,15 @@ class LogsConfigView(discord.ui.View):
             for name, key in mapping:
                 ch = await guild.create_text_channel(name=name, category=cat)
                 config.CONFIG["logs"][key] = ch.id
-            await interaction.response.send_message(f"✅ {len(mapping)} salons créés dans **{cat.name}**.", ephemeral=True)
+            await interaction.followup.send(
+                f"✅ {len(mapping)} salons créés dans **{cat.name}**.",
+                ephemeral=True
+            )
         except Exception as e:
-            await interaction.response.send_message(f"❌ Erreur : {e}", ephemeral=True)
+            await interaction.followup.send(
+                f"❌ Erreur : {str(e)}",
+                ephemeral=True
+            )
 
     @discord.ui.button(label="⬅️ Retour", style=discord.ButtonStyle.danger)
     async def back(self, interaction, button):
