@@ -146,6 +146,42 @@ class ModerationCommandsCog(commands.Cog):
             await interaction.response.send_message("📭 Aucun log d'audit trouvé.", ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(f"❌ Erreur : {str(e)}", ephemeral=True)
+    @discord.app_commands.command(name="logs", description="Définit le salon pour un type de log")
+    @discord.app_commands.describe(
+        type="Type de log",
+        salon="Salon de destination"
+    )
+    @discord.app_commands.choices(type=[
+        discord.app_commands.Choice(name="messages", value="messages"),
+        discord.app_commands.Choice(name="moderation", value="moderation"),
+        discord.app_commands.Choice(name="ticket", value="ticket"),
+        discord.app_commands.Choice(name="vocal", value="vocal"),
+        discord.app_commands.Choice(name="securite", value="securite")
+    ])
+    @discord.app_commands.checks.has_permissions(administrator=True)
+    async def logs(self, interaction: discord.Interaction, type: str, salon: discord.TextChannel):
+        import core_config as config
+        config.CONFIG["logs"][type] = salon.id
+        await interaction.response.send_message(f"✅ Salon de logs **{type}** défini sur {salon.mention}.", ephemeral=True)
+
+    @discord.app_commands.command(name="scan-deleted", description="Récupère les suppressions de messages récentes manquées")
+    @discord.app_commands.checks.has_permissions(administrator=True)
+    async def scan_deleted(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        count = 0
+        async for entry in interaction.guild.audit_logs(action=discord.AuditLogAction.message_delete, limit=50):
+            if (discord.utils.utcnow() - entry.created_at).total_seconds() > 300:
+                break
+            embed = discord.Embed(
+                title="🗑️ Message supprimé (récupéré)",
+                description=f"**Auteur** : {entry.target}\n**Supprimé par** : {entry.user}",
+                color=0xff8800,
+                timestamp=entry.created_at
+            )
+            from utils.logging import send_log_to
+            await send_log_to(self.bot, "messages", embed)
+            count += 1
+        await interaction.followup.send(f"✅ {count} suppressions récupérées.", ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(ModerationCommandsCog(bot))

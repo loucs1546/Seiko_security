@@ -3,7 +3,7 @@ import discord
 from discord.ext import commands
 import core_config as config
 import re
-from utils.logging import send_log
+from utils.logging import send_log_to
 from config.filters import est_url_suspecte
 
 URL_REGEX = re.compile(r"https?://[^\s]+")
@@ -23,7 +23,6 @@ class LinkFilterCog(commands.Cog):
 
         try:
             await message.delete()
-            # ✅ Loguer ICI
             embed = discord.Embed(
                 title="🗑️ Message supprimé (lien suspect)",
                 description=f"**Auteur** : {message.author.mention}\n"
@@ -34,7 +33,7 @@ class LinkFilterCog(commands.Cog):
             )
             if message.content:
                 embed.add_field(name="Contenu", value=message.content[:1020], inline=False)
-            await send_log(self.bot, "messages", embed)
+            await send_log_to(self.bot, "securite", embed)
 
             await message.channel.send(
                 f"{message.author.mention}, votre message contient un lien suspect et a été supprimé.",
@@ -42,8 +41,6 @@ class LinkFilterCog(commands.Cog):
             )
         except Exception:
             pass
-
-        # On ne logue plus ici (déjà fait ci-dessus)
 
 async def setup(bot):
     await bot.add_cog(LinkFilterCog(bot))

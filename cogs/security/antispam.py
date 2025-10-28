@@ -46,8 +46,8 @@ class AntiSpamCog(commands.Cog):
                     )
                     if message.content:
                         embed.add_field(name="Contenu", value=message.content[:1020], inline=False)
-                    from utils.logging import send_log
-                    await send_log(self.bot, "messages", embed)
+                    from utils.logging import send_log_to
+                    await send_log_to(self.bot, "securite", embed)
 
                     await message.channel.send(
                         f"{message.author.mention}, veuillez ne pas spammer.",

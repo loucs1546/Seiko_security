@@ -20,6 +20,9 @@ CONFIG = {
         "roles": None,
         "profile": None,
         "content": None,
-        "sanctions": None
+        "sanctions": None,
+        "moderation": None,
+        "ticket": None,
+        "securite": None
     }
 }
