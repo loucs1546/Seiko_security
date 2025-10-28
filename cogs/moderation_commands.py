@@ -4,7 +4,6 @@ from discord.ext import commands
 import core_config as config
 from utils.logging import send_log_to
 
-
 def get_sanction_channel(bot):
     return bot.get_channel(config.CONFIG["logs"].get("sanctions"))
 
@@ -12,7 +11,7 @@ class ModerationCommandsCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    # === SÉCURITÉ (inchangé) ===
+    # === SÉCURITÉ ===
     @discord.app_commands.command(name="anti-spam", description="Active/désactive l'anti-spam")
     @discord.app_commands.checks.has_permissions(administrator=True)
     async def anti_spam(self, interaction: discord.Interaction, actif: bool):
@@ -31,7 +30,7 @@ class ModerationCommandsCog(commands.Cog):
         config.CONFIG["security"]["anti_hack"] = actif
         await interaction.response.send_message(f"✅ Anti-hack {'activé' if actif else 'désactivé'}.", ephemeral=True)
 
-    # === COMMANDES DE MODÉRATION (toutes restaurées) ===
+    # === MODÉRATION ===
     @discord.app_commands.command(name="ping", description="Affiche la latence du bot")
     async def ping(self, interaction: discord.Interaction):
         latency = round(self.bot.latency * 1000)
@@ -56,7 +55,7 @@ class ModerationCommandsCog(commands.Cog):
     @discord.app_commands.checks.has_permissions(manage_channels=True)
     async def delete_categorie(self, interaction: discord.Interaction, categorie: discord.CategoryChannel):
         await interaction.response.send_message(
-            f"✅ Suppression de la catégorie **{categorie.name}** en cours...",
+            f"✅ Suppression en cours...",
             ephemeral=True
         )
         for channel in categorie.channels:
@@ -91,9 +90,8 @@ class ModerationCommandsCog(commands.Cog):
             color=0xff9900,
             timestamp=discord.utils.utcnow()
         )
-        sanction_ch = get_sanction_channel(self.bot)
-        if sanction_ch:
-            await sanction_ch.send(embed=embed)
+        ch = get_sanction_channel(self.bot)
+        if ch: await ch.send(embed=embed)
         await interaction.response.send_message(f"✅ {pseudo.mention} expulsé.", ephemeral=True)
 
     @discord.app_commands.command(name="ban", description="Bannit un membre")
@@ -111,9 +109,8 @@ class ModerationCommandsCog(commands.Cog):
             color=0xff0000,
             timestamp=discord.utils.utcnow()
         )
-        sanction_ch = get_sanction_channel(self.bot)
-        if sanction_ch:
-            await sanction_ch.send(embed=embed)
+        ch = get_sanction_channel(self.bot)
+        if ch: await ch.send(embed=embed)
         await interaction.response.send_message(f"✅ {pseudo.mention} banni.", ephemeral=True)
 
     @discord.app_commands.command(name="warn", description="Avertit un membre")
@@ -126,32 +123,28 @@ class ModerationCommandsCog(commands.Cog):
             color=0xffff00,
             timestamp=discord.utils.utcnow()
         )
-        sanction_ch = get_sanction_channel(self.bot)
-        if sanction_ch:
-            await sanction_ch.send(embed=embed)
-        await interaction.response.send_message(f"✅ Avertissement envoyé pour {pseudo.mention}.", ephemeral=True)
+        ch = get_sanction_channel(self.bot)
+        if ch: await ch.send(embed=embed)
+        await interaction.response.send_message(f"✅ Avertissement envoyé.", ephemeral=True)
 
-    # === NOUVELLE COMMANDE : /reachlog ===
-    @discord.app_commands.command(name="reachlog", description="Affiche le dernier log d'audit du serveur")
+    @discord.app_commands.command(name="reachlog", description="Affiche le dernier log d'audit")
     @discord.app_commands.checks.has_permissions(administrator=True)
     async def reachlog(self, interaction: discord.Interaction):
         try:
             async for entry in interaction.guild.audit_logs(limit=1):
                 log_msg = f"**{entry.action.name}**\n"
-                log_msg += f"**Cible** : {entry.target}\n"
+                log_msg += f"**Cible** : {getattr(entry, 'target', 'Inconnue')}\n"
                 log_msg += f"**Auteur** : {entry.user}\n"
-                log_msg += f"**Raison** : {entry.reason or 'Aucune'}\n"
                 log_msg += f"**Date** : <t:{int(entry.created_at.timestamp())}:R>"
                 await interaction.response.send_message(log_msg, ephemeral=True)
                 return
-            await interaction.response.send_message("📭 Aucun log d'audit trouvé.", ephemeral=True)
+            await interaction.response.send_message("📭 Aucun log trouvé.", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Erreur : {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Erreur : {e}", ephemeral=True)
+
+    # === NOUVELLES COMMANDES ===
     @discord.app_commands.command(name="logs", description="Définit le salon pour un type de log")
-    @discord.app_commands.describe(
-        type="Type de log",
-        salon="Salon de destination"
-    )
+    @discord.app_commands.describe(type="Type de log", salon="Salon de destination")
     @discord.app_commands.choices(type=[
         discord.app_commands.Choice(name="messages", value="messages"),
         discord.app_commands.Choice(name="moderation", value="moderation"),
@@ -161,11 +154,10 @@ class ModerationCommandsCog(commands.Cog):
     ])
     @discord.app_commands.checks.has_permissions(administrator=True)
     async def logs(self, interaction: discord.Interaction, type: str, salon: discord.TextChannel):
-        import core_config as config
         config.CONFIG["logs"][type] = salon.id
-        await interaction.response.send_message(f"✅ Salon de logs **{type}** défini sur {salon.mention}.", ephemeral=True)
+        await interaction.response.send_message(f"✅ Salon **{type}** défini sur {salon.mention}.", ephemeral=True)
 
-    @discord.app_commands.command(name="scan-deleted", description="Récupère les suppressions de messages récentes manquées")
+    @discord.app_commands.command(name="scan-deleted", description="Récupère les suppressions récentes manquées")
     @discord.app_commands.checks.has_permissions(administrator=True)
     async def scan_deleted(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
@@ -179,7 +171,6 @@ class ModerationCommandsCog(commands.Cog):
                 color=0xff8800,
                 timestamp=entry.created_at
             )
-            from utils.logging import send_log_to
             await send_log_to(self.bot, "messages", embed)
             count += 1
         await interaction.followup.send(f"✅ {count} suppressions récupérées.", ephemeral=True)
