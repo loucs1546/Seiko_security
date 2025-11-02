@@ -2,14 +2,32 @@
 import discord
 from discord.ext import commands
 import core_config as config
-from utils.logging import send_log
+from utils.logging import send_log_to
 
 def get_sanction_channel(bot):
-    return bot.get_channel(config.LOG_CHANNELS.get("sanctions"))
+    return bot.get_channel(config.CONFIG["logs"].get("sanctions"))
 
 class ModerationCommandsCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    @discord.app_commands.command(name="anti-spam", description="Active/désactive l'anti-spam")
+    @discord.app_commands.checks.has_permissions(administrator=True)
+    async def anti_spam(self, interaction: discord.Interaction, actif: bool):
+        config.CONFIG["security"]["anti_spam"] = actif
+        await interaction.response.send_message(f"✅ Anti-spam {'activé' if actif else 'désactivé'}.", ephemeral=True)
+
+    @discord.app_commands.command(name="anti-raid", description="Active/désactive l'anti-raid")
+    @discord.app_commands.checks.has_permissions(administrator=True)
+    async def anti_raid(self, interaction: discord.Interaction, actif: bool):
+        config.CONFIG["security"]["anti_raid"] = actif
+        await interaction.response.send_message(f"✅ Anti-raid {'activé' if actif else 'désactivé'}.", ephemeral=True)
+
+    @discord.app_commands.command(name="anti-hack", description="Active/désactive l'anti-hack")
+    @discord.app_commands.checks.has_permissions(administrator=True)
+    async def anti_hack(self, interaction: discord.Interaction, actif: bool):
+        config.CONFIG["security"]["anti_hack"] = actif
+        await interaction.response.send_message(f"✅ Anti-hack {'activé' if actif else 'désactivé'}.", ephemeral=True)
 
     @discord.app_commands.command(name="ping", description="Affiche la latence du bot")
     async def ping(self, interaction: discord.Interaction):
@@ -34,9 +52,8 @@ class ModerationCommandsCog(commands.Cog):
     @discord.app_commands.describe(categorie="Catégorie à supprimer")
     @discord.app_commands.checks.has_permissions(manage_channels=True)
     async def delete_categorie(self, interaction: discord.Interaction, categorie: discord.CategoryChannel):
-        # ✅ Réponse immédiate
         await interaction.response.send_message(
-            f"✅ Suppression de la catégorie **{categorie.name}** en cours...",
+            f"✅ Suppression en cours...",
             ephemeral=True
         )
         for channel in categorie.channels:
@@ -106,7 +123,22 @@ class ModerationCommandsCog(commands.Cog):
         )
         ch = get_sanction_channel(self.bot)
         if ch: await ch.send(embed=embed)
-        await interaction.response.send_message(f"✅ Avertissement envoyé pour {pseudo.mention}.", ephemeral=True)
+        await interaction.response.send_message(f"✅ Avertissement envoyé.", ephemeral=True)
+
+    @discord.app_commands.command(name="reachlog", description="Affiche le dernier log d'audit")
+    @discord.app_commands.checks.has_permissions(administrator=True)
+    async def reachlog(self, interaction: discord.Interaction):
+        try:
+            async for entry in interaction.guild.audit_logs(limit=1):
+                log_msg = f"**{entry.action.name}**\n"
+                log_msg += f"**Cible** : {getattr(entry, 'target', 'Inconnue')}\n"
+                log_msg += f"**Auteur** : {entry.user}\n"
+                log_msg += f"**Date** : <t:{int(entry.created_at.timestamp())}:R>"
+                await interaction.response.send_message(log_msg, ephemeral=True)
+                return
+            await interaction.response.send_message("📭 Aucun log trouvé.", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Erreur : {e}", ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(ModerationCommandsCog(bot))
