@@ -1,6 +1,8 @@
 # cogs/logging.py
 import discord
 from discord.ext import commands
+from utils.logging import send_log_to
+import datetime
 import core_config as config
 from utils.logging import send_log
 
