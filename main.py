@@ -126,4 +126,64 @@ async def scan_deleted(interaction: discord.Interaction):
         count += 1
     await interaction.followup.send(f"✅ {count} suppressions récupérées.", ephemeral=True)
 
+@bot.tree.command(name="logs-messages", description="Configure les logs des messages")
+@discord.app_commands.describe(salon="Salon où envoyer les logs")
+@discord.app_commands.checks.has_permissions(administrator=True)
+async def logs_messages(interaction: discord.Interaction, salon: discord.TextChannel):
+    config.CONFIG.setdefault("logs", {})["messages"] = salon.id
+    await interaction.response.send_message(
+        f"✅ Les logs des messages seront envoyés dans {salon.mention}",
+        ephemeral=True
+    )
+
+@bot.tree.command(name="logs-moderation", description="Configure les logs de modération")
+@discord.app_commands.describe(salon="Salon où envoyer les logs")
+@discord.app_commands.checks.has_permissions(administrator=True)
+async def logs_moderation(interaction: discord.Interaction, salon: discord.TextChannel):
+    config.CONFIG.setdefault("logs", {})["moderation"] = salon.id
+    await interaction.response.send_message(
+        f"✅ Les logs de modération seront envoyés dans {salon.mention}",
+        ephemeral=True
+    )
+
+@bot.tree.command(name="logs-vocal", description="Configure les logs vocaux")
+@discord.app_commands.describe(salon="Salon où envoyer les logs")
+@discord.app_commands.checks.has_permissions(administrator=True)
+async def logs_vocal(interaction: discord.Interaction, salon: discord.TextChannel):
+    config.CONFIG.setdefault("logs", {})["vocal"] = salon.id
+    await interaction.response.send_message(
+        f"✅ Les logs vocaux seront envoyés dans {salon.mention}",
+        ephemeral=True
+    )
+
+@bot.tree.command(name="logs-ticket", description="Configure les logs des tickets")
+@discord.app_commands.describe(salon="Salon où envoyer les logs")
+@discord.app_commands.checks.has_permissions(administrator=True)
+async def logs_ticket(interaction: discord.Interaction, salon: discord.TextChannel):
+    config.CONFIG.setdefault("logs", {})["ticket"] = salon.id
+    await interaction.response.send_message(
+        f"✅ Les logs des tickets seront envoyés dans {salon.mention}",
+        ephemeral=True
+    )
+
+@bot.tree.command(name="logs-giveaway", description="Configure les logs des giveaways")
+@discord.app_commands.describe(salon="Salon où envoyer les logs")
+@discord.app_commands.checks.has_permissions(administrator=True)
+async def logs_giveaway(interaction: discord.Interaction, salon: discord.TextChannel):
+    config.CONFIG.setdefault("logs", {})["giveaway"] = salon.id
+    await interaction.response.send_message(
+        f"✅ Les logs des giveaways seront envoyés dans {salon.mention}",
+        ephemeral=True
+    )
+
+@bot.tree.command(name="logs-securite", description="Configure les logs de sécurité")
+@discord.app_commands.describe(salon="Salon où envoyer les logs")
+@discord.app_commands.checks.has_permissions(administrator=True)
+async def logs_securite(interaction: discord.Interaction, salon: discord.TextChannel):
+    config.CONFIG.setdefault("logs", {})["securite"] = salon.id
+    await interaction.response.send_message(
+        f"✅ Les logs de sécurité seront envoyés dans {salon.mention}",
+        ephemeral=True
+    )
+
 bot.run(config.DISCORD_TOKEN)

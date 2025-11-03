@@ -103,35 +103,14 @@ class ConfigView(discord.ui.View):
     def __init__(self, bot):
         super().__init__(timeout=None)
         self.bot = bot
-        self.add_item(SecurityButton(bot))
-        self.add_item(LogsButton(bot))
-        self.add_item(CloseButton())
 
-class SecurityButton(discord.ui.Button):
-    def __init__(self, bot):
-        super().__init__(label="Cyber-sécurité", style=discord.ButtonStyle.primary)
-        self.bot = bot
-
-    async def callback(self, interaction: discord.Interaction):
-        embed = discord.Embed(
-            title="🛡️ Configuration de la Sécurité",
-            description="Activez/désactivez les protections",
-            color=discord.Color.red()
-        )
-        await interaction.response.edit_message(embed=embed, view=SecurityView(self.bot))
-
-class LogsButton(discord.ui.Button):
-    def __init__(self, bot):
-        super().__init__(label="Logs", style=discord.ButtonStyle.secondary)
-        self.bot = bot
-
-    async def callback(self, interaction: discord.Interaction):
-        embed = discord.Embed(
-            title="📋 Configuration des Logs",
-            description="Choisissez la méthode de configuration des logs.",
-            color=discord.Color.blue()
-        )
-        await interaction.response.edit_message(embed=embed, view=LogsSetupView(self.bot))
+    @discord.ui.button(label="Créer", style=discord.ButtonStyle.green, custom_id="config:create")
+    async def create_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        log_setup = self.bot.get_cog("LogSetupCog")
+        if log_setup:
+            await log_setup._create_category(interaction)
+        else:
+            await interaction.response.send_message("❌ Système de logs non disponible", ephemeral=True)
 
 class ConfigCog(commands.Cog):
     def __init__(self, bot):
@@ -153,3 +132,5 @@ class ConfigCog(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(ConfigCog(bot))
+    # Enregistrer la view pour que les boutons persistent
+    bot.add_view(ConfigView(bot))
