@@ -15,10 +15,9 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def on_ready():
     print(f"✅ {bot.user} est en ligne !")
     
-    # Charger les cogs
     cog_paths = [
         "cogs.logging",
-        "cogs.log_setup",  # Assure-toi que c'est bien ce chemin
+        "cogs.log_setup",
         "cogs.security.antiraid",
         "cogs.security.antispam",
         "cogs.security.content_filter",
@@ -43,19 +42,17 @@ async def on_ready():
     try:
         if config.GUILD_ID:
             guild = discord.Object(id=config.GUILD_ID)
-            # Force sync toutes les commandes
             bot.tree.copy_global_to(guild=guild)
             synced = await bot.tree.sync(guild=guild)
-            print(f"✅ {len(synced)} commandes synchronisées pour le serveur: {[c.name for c in synced]}")
+            print(f"✅ {len(synced)} commandes synchronisées pour le serveur : {[c.name for c in synced]}")
         else:
             synced = await bot.tree.sync()
-            print(f"✅ {len(synced)} commandes synchronisées globalement: {[c.name for c in synced]}")
+            print(f"✅ {len(synced)} commandes synchronisées globalement : {[c.name for c in synced]}")
     except Exception as e:
-        print(f"❌ Erreur de synchronisation: {e}")
+        print(f"❌ Erreur de synchronisation : {e}")
 
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
-    # Evite l'exception si l'interaction a déjà reçu une réponse
     try:
         already_responded = interaction.response.is_done()
     except Exception:
@@ -68,17 +65,16 @@ async def on_app_command_error(interaction: discord.Interaction, error: discord.
             else:
                 await interaction.followup.send(content=content, embed=embed, ephemeral=ephemeral)
         except Exception:
-            # dernier recours — log dans la console
-            print(f"Erreur d'envoi d'erreur: {error}")
+            print(f"Erreur d'envoi d'erreur : {error}")
 
     if isinstance(error, discord.app_commands.CommandNotFound):
         await safe_send("❌ Cette commande n'existe pas.", ephemeral=True)
     elif isinstance(error, discord.app_commands.MissingPermissions):
         await safe_send("❌ Permissions insuffisantes.", ephemeral=True)
     else:
-        await safe_send(f"❌ Une erreur est survenue: {error}", ephemeral=True)
+        await safe_send(f"❌ Une erreur est survenue : {error}", ephemeral=True)
 
-# === COMMANDES SLASH (comme /ping, /kick, etc.) ===
+# === COMMANDES SLASH PRINCIPALES ===
 
 @bot.tree.command(name="logs", description="Définit le salon pour un type de log")
 @discord.app_commands.describe(type="Type de log", salon="Salon de destination")
@@ -91,16 +87,12 @@ async def on_app_command_error(interaction: discord.Interaction, error: discord.
 ])
 @discord.app_commands.checks.has_permissions(administrator=True)
 async def logs(interaction: discord.Interaction, type: str, salon: discord.TextChannel):
-    # Assure l'existence de la clé logs dans la config
     if not isinstance(config.CONFIG, dict):
         config.CONFIG = {}
-    config.CONFIG.setdefault("logs", {})
-    config.CONFIG["logs"][type] = salon.id
-
-    # Embed récapitulatif pour meilleure visibilité UI
+    config.CONFIG.setdefault("logs", {})[type] = salon.id
     embed = discord.Embed(
         title="📌 Configuration des logs",
-        description=f"Le type **{type}** sera maintenant envoyé dans {salon.mention}.",
+        description=f"Le type **{type}** sera envoyé dans {salon.mention}.",
         color=0x2f3136,
         timestamp=discord.utils.utcnow()
     )
@@ -126,64 +118,41 @@ async def scan_deleted(interaction: discord.Interaction):
         count += 1
     await interaction.followup.send(f"✅ {count} suppressions récupérées.", ephemeral=True)
 
+# === COMMANDES ALTERNATIVES (au cas où) ===
+
 @bot.tree.command(name="logs-messages", description="Configure les logs des messages")
 @discord.app_commands.describe(salon="Salon où envoyer les logs")
 @discord.app_commands.checks.has_permissions(administrator=True)
 async def logs_messages(interaction: discord.Interaction, salon: discord.TextChannel):
     config.CONFIG.setdefault("logs", {})["messages"] = salon.id
-    await interaction.response.send_message(
-        f"✅ Les logs des messages seront envoyés dans {salon.mention}",
-        ephemeral=True
-    )
+    await interaction.response.send_message(f"✅ Logs messages → {salon.mention}", ephemeral=True)
 
 @bot.tree.command(name="logs-moderation", description="Configure les logs de modération")
 @discord.app_commands.describe(salon="Salon où envoyer les logs")
 @discord.app_commands.checks.has_permissions(administrator=True)
 async def logs_moderation(interaction: discord.Interaction, salon: discord.TextChannel):
     config.CONFIG.setdefault("logs", {})["moderation"] = salon.id
-    await interaction.response.send_message(
-        f"✅ Les logs de modération seront envoyés dans {salon.mention}",
-        ephemeral=True
-    )
+    await interaction.response.send_message(f"✅ Logs modération → {salon.mention}", ephemeral=True)
 
 @bot.tree.command(name="logs-vocal", description="Configure les logs vocaux")
 @discord.app_commands.describe(salon="Salon où envoyer les logs")
 @discord.app_commands.checks.has_permissions(administrator=True)
 async def logs_vocal(interaction: discord.Interaction, salon: discord.TextChannel):
     config.CONFIG.setdefault("logs", {})["vocal"] = salon.id
-    await interaction.response.send_message(
-        f"✅ Les logs vocaux seront envoyés dans {salon.mention}",
-        ephemeral=True
-    )
+    await interaction.response.send_message(f"✅ Logs vocal → {salon.mention}", ephemeral=True)
 
 @bot.tree.command(name="logs-ticket", description="Configure les logs des tickets")
 @discord.app_commands.describe(salon="Salon où envoyer les logs")
 @discord.app_commands.checks.has_permissions(administrator=True)
 async def logs_ticket(interaction: discord.Interaction, salon: discord.TextChannel):
     config.CONFIG.setdefault("logs", {})["ticket"] = salon.id
-    await interaction.response.send_message(
-        f"✅ Les logs des tickets seront envoyés dans {salon.mention}",
-        ephemeral=True
-    )
-
-@bot.tree.command(name="logs-giveaway", description="Configure les logs des giveaways")
-@discord.app_commands.describe(salon="Salon où envoyer les logs")
-@discord.app_commands.checks.has_permissions(administrator=True)
-async def logs_giveaway(interaction: discord.Interaction, salon: discord.TextChannel):
-    config.CONFIG.setdefault("logs", {})["giveaway"] = salon.id
-    await interaction.response.send_message(
-        f"✅ Les logs des giveaways seront envoyés dans {salon.mention}",
-        ephemeral=True
-    )
+    await interaction.response.send_message(f"✅ Logs tickets → {salon.mention}", ephemeral=True)
 
 @bot.tree.command(name="logs-securite", description="Configure les logs de sécurité")
 @discord.app_commands.describe(salon="Salon où envoyer les logs")
 @discord.app_commands.checks.has_permissions(administrator=True)
 async def logs_securite(interaction: discord.Interaction, salon: discord.TextChannel):
     config.CONFIG.setdefault("logs", {})["securite"] = salon.id
-    await interaction.response.send_message(
-        f"✅ Les logs de sécurité seront envoyés dans {salon.mention}",
-        ephemeral=True
-    )
+    await interaction.response.send_message(f"✅ Logs sécurité → {salon.mention}", ephemeral=True)
 
 bot.run(config.DISCORD_TOKEN)
