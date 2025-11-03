@@ -1,6 +1,7 @@
 # cogs/logging.py
 import discord
 from discord.ext import commands
+from discord import app_commands
 from utils.logging import send_log_to
 import datetime
 import core_config as config
@@ -348,6 +349,16 @@ class LoggingCog(commands.Cog):
             await send_log_to(self.bot, "messages", embed)
         except Exception as e:
             print(f"Erreur logging commande: {e}")
+
+    @app_commands.command(name="logs", description="Affiche les logs d'un type")
+    @app_commands.describe(type="Type de log (messages, moderation, ticket, vocal, giveaway, securite)")
+    async def logs(self, interaction: discord.Interaction, type: str):
+        channel_id = interaction.guild and interaction.guild.id
+        # Ici, tu peux afficher les logs du type demandé (exemple simplifié)
+        await interaction.response.send_message(
+            f"Affichage des logs pour le type : **{type}** (fonction à compléter selon stockage des logs)",
+            ephemeral=True
+        )
 
 async def setup(bot):
     await bot.add_cog(LoggingCog(bot))
