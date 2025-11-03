@@ -329,29 +329,23 @@ class LoggingCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_interaction(self, interaction: discord.Interaction):
-        if not interaction.guild or interaction.guild.id != config.GUILD_ID or interaction.type != discord.InteractionType.application_command:
-            return
-
-        args = []
-        if interaction.data.get("options"):
-            for opt in interaction.data["options"]:
-                if opt["type"] in (6, 7, 8):
-                    args.append(f"{opt['name']}: <@{opt['value']}>")
-                else:
-                    args.append(f"{opt['name']}: {opt['value']}")
-
-        full_command = f"/{interaction.command.name}"
-        if args:
-            full_command += " " + " ".join(args)
-
-        embed = discord.Embed(
-            title="🛠️ Commande slash détectée",
-            description=f"**Utilisateur** : {interaction.user.mention}\n"
-                        f"**Commande complète** :\n```\n{full_command}\n```",
-            color=0x2ecc71,
-            timestamp=discord.utils.utcnow()
-        )
-        await send_log(self.bot, "commands", embed)
+        try:
+            if interaction.command:
+                full_command = f"/{interaction.command.name}"
+                if interaction.command.parent:
+                    full_command = f"/{interaction.command.parent.name} {interaction.command.name}"
+            else:
+                full_command = "unknown command"
+                
+            # Log l'utilisation de la commande
+            embed = discord.Embed(
+                title="🤖 Commande utilisée",
+                description=f"**Commande**: {full_command}\n**Utilisateur**: {interaction.user.mention}",
+                color=0x00ff00
+            )
+            await send_log_to(self.bot, "messages", embed)
+        except Exception as e:
+            print(f"Erreur logging commande: {e}")
 
 async def setup(bot):
     await bot.add_cog(LoggingCog(bot))

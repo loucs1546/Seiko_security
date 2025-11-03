@@ -15,6 +15,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def on_ready():
     print(f"✅ {bot.user} est en ligne !")
     
+    # Charger les cogs
     cog_paths = [
         "cogs.logging",
         "cogs.security.antiraid",
@@ -41,13 +42,22 @@ async def on_ready():
     try:
         if config.GUILD_ID:
             guild = discord.Object(id=config.GUILD_ID)
+            # Force sync toutes les commandes
+            bot.tree.copy_global_to(guild=guild)
             synced = await bot.tree.sync(guild=guild)
+            print(f"✅ {len(synced)} commandes synchronisées pour le serveur: {[c.name for c in synced]}")
         else:
-            # Aucun GUILD_ID fourni -> synchronisation globale
             synced = await bot.tree.sync()
-        print(f"✅ {len(synced)} commandes : {[c.name for c in synced]}")
+            print(f"✅ {len(synced)} commandes synchronisées globalement: {[c.name for c in synced]}")
     except Exception as e:
-        print(f"❌ Erreur : {e}")
+        print(f"❌ Erreur de synchronisation: {e}")
+
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
+    if isinstance(error, discord.app_commands.CommandNotFound):
+        await interaction.response.send_message("❌ Cette commande n'existe pas.", ephemeral=True)
+    else:
+        await interaction.response.send_message(f"❌ Une erreur est survenue: {error}", ephemeral=True)
 
 # === COMMANDES SLASH (comme /ping, /kick, etc.) ===
 
