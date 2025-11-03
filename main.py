@@ -3,6 +3,7 @@ import discord
 from discord.ext import commands
 import core_config as config
 import asyncio
+import inspect
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -27,7 +28,9 @@ async def on_ready():
     
     for cog in cog_paths:
         try:
-            await bot.load_extension(cog)
+            res = bot.load_extension(cog)
+            if inspect.isawaitable(res):
+                await res
             print(f"✅ Cog chargé : {cog}")
         except Exception as e:
             print(f"❌ Erreur : {e}")
@@ -36,8 +39,12 @@ async def on_ready():
 
     # 🔁 SYNCHRONISATION POUR TON SERVEUR (instantané)
     try:
-        guild = discord.Object(id=config.GUILD_ID)
-        synced = await bot.tree.sync(guild=guild)
+        if config.GUILD_ID:
+            guild = discord.Object(id=config.GUILD_ID)
+            synced = await bot.tree.sync(guild=guild)
+        else:
+            # Aucun GUILD_ID fourni -> synchronisation globale
+            synced = await bot.tree.sync()
         print(f"✅ {len(synced)} commandes : {[c.name for c in synced]}")
     except Exception as e:
         print(f"❌ Erreur : {e}")

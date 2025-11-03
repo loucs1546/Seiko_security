@@ -1,0 +1,18 @@
+# Environnement virtuel
+.venv/
+venv/
+
+# Fichier de secrets locaux
+.env
+
+# Bytecode et artefacts Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
