@@ -18,7 +18,7 @@ async def on_ready():
     # Charger les cogs
     cog_paths = [
         "cogs.logging",
-        "cogs.log_setup",                # <-- Ajout pour enregistrer /add-cat-log
+        "cogs.log_setup",  # Assure-toi que c'est bien ce chemin
         "cogs.security.antiraid",
         "cogs.security.antispam",
         "cogs.security.content_filter",

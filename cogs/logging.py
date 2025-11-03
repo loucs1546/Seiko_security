@@ -36,6 +36,19 @@ class LoggingCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    async def log_to_channel(self, log_type: str, embed: discord.Embed):
+        if not isinstance(config.CONFIG, dict) or "logs" not in config.CONFIG:
+            return
+        
+        channel_id = config.CONFIG["logs"].get(log_type)
+        if channel_id:
+            channel = self.bot.get_channel(channel_id)
+            if channel:
+                try:
+                    await channel.send(embed=embed)
+                except Exception as e:
+                    print(f"Erreur d'envoi de log: {e}")
+
     @commands.Cog.listener()
     async def on_message(self, message):
         if not message.guild or message.guild.id != config.GUILD_ID or message.author.id == self.bot.user.id:

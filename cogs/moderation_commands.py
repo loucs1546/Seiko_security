@@ -1,6 +1,7 @@
 # cogs/moderation_commands.py
 import discord
 from discord.ext import commands
+from datetime import datetime
 import core_config as config
 from utils.logging import send_log_to
 
@@ -77,6 +78,8 @@ class ModerationCommandsCog(commands.Cog):
     @discord.app_commands.describe(pseudo="Membre à expulser", raison="Raison du kick")
     @discord.app_commands.checks.has_permissions(kick_members=True)
     async def kick(self, interaction: discord.Interaction, pseudo: discord.Member, raison: str = "Aucune raison"):
+        await interaction.response.defer(ephemeral=True)
+        
         try:
             await pseudo.send(f"⚠️ Vous avez été expulsé de **{interaction.guild.name}** pour : **{raison}**.")
         except:
@@ -86,12 +89,11 @@ class ModerationCommandsCog(commands.Cog):
             title="👢 Kick",
             description=f"**Membre** : {pseudo.mention}\n**Modérateur** : {interaction.user.mention}\n**Raison** : {raison}",
             color=0xff9900,
-            timestamp=discord.utils.utcnow()
+            timestamp=datetime.utcnow()
         )
         ch = get_sanction_channel(self.bot)
         if ch: await ch.send(embed=embed)
-        await interaction.response.send_message(f"✅ {pseudo.mention} expulsé.", ephemeral=True)
-
+        await interaction.followup.send(f"✅ {pseudo.mention} expulsé.", ephemeral=True)
     @discord.app_commands.command(name="ban", description="Bannit un membre")
     @discord.app_commands.describe(pseudo="Membre à bannir", temps="Jours de suppression des messages (0 = aucun)", raison="Raison du ban")
     @discord.app_commands.checks.has_permissions(ban_members=True)
@@ -105,7 +107,7 @@ class ModerationCommandsCog(commands.Cog):
             title="🔨 Ban",
             description=f"**Membre** : {pseudo.mention}\n**Modérateur** : {interaction.user.mention}\n**Raison** : {raison}",
             color=0xff0000,
-            timestamp=discord.utils.utcnow()
+            timestamp=datetime.utcnow()
         )
         ch = get_sanction_channel(self.bot)
         if ch: await ch.send(embed=embed)
