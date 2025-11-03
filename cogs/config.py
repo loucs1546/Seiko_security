@@ -3,31 +3,48 @@ from discord.ext import commands
 from discord import app_commands
 import core_config as config
 
-class ToggleButton(discord.ui.Button):
-    def __init__(self, label, style, config_key, bot):
-        super().__init__(label=label, style=style)
-        self.config_key = config_key
-        self.bot = bot
-        self.update_label()
+class DraftBotView(discord.ui.View):
+    """Vue de base avec style DraftBot"""
+    def __init__(self):
+        super().__init__(timeout=None)
+    
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
 
-    def update_label(self):
-        state = config.CONFIG.get("security", {}).get(self.config_key, False)
-        self.label = f"{self.label.split(' ')[0]} {'✅' if state else '❌'}"
+class ConfigMainView(DraftBotView):
+    def __init__(self, bot):
+        super().__init__()
+        self.bot = bot
+        # Ajout des boutons principaux
+        self.add_item(SecurityButton(bot))
+        self.add_item(LogsButton(bot))
+
+class SecurityView(DraftBotView):
+    def __init__(self, bot):
+        super().__init__()
+        # Ajout des toggles de sécurité
+        self.add_item(SecurityToggle("Anti-spam", "anti_spam", bot))
+        self.add_item(SecurityToggle("Anti-hack", "anti_hack", bot))
+        self.add_item(SecurityToggle("Anti-raid", "anti_raid", bot))
+        self.add_item(BackButton("Menu principal"))
+
+class SecurityToggle(discord.ui.Button):
+    def __init__(self, label, key, bot):
+        super().__init__(style=discord.ButtonStyle.secondary, label=label)
+        self.key = key
+        self.bot = bot
+        self.update_style()
+    
+    def update_style(self):
+        enabled = config.CONFIG.get("security", {}).get(self.key, False)
+        self.style = discord.ButtonStyle.success if enabled else discord.ButtonStyle.danger
+        self.label = f"{self.label.split(' ')[0]} {'✅' if enabled else '❌'}"
 
     async def callback(self, interaction: discord.Interaction):
-        # Toggle la config
-        current = config.CONFIG.setdefault("security", {}).get(self.config_key, False)
-        config.CONFIG["security"][self.config_key] = not current
-        self.update_label()
+        config.CONFIG.setdefault("security", {})[self.key] = not config.CONFIG["security"].get(self.key, False)
+        self.update_style()
         await interaction.response.edit_message(view=self.view)
-
-class SecurityView(discord.ui.View):
-    def __init__(self, bot):
-        super().__init__(timeout=180)
-        self.add_item(ToggleButton("Anti-spam", discord.ButtonStyle.danger, "anti_spam", bot))
-        self.add_item(ToggleButton("Anti-hack", discord.ButtonStyle.danger, "anti_hack", bot))
-        self.add_item(ToggleButton("Anti-raid", discord.ButtonStyle.danger, "anti_raid", bot))
-        self.add_item(CloseButton())
 
 class CloseButton(discord.ui.Button):
     def __init__(self):
@@ -38,7 +55,7 @@ class CloseButton(discord.ui.Button):
 
 class LogsSetupView(discord.ui.View):
     def __init__(self, bot):
-        super().__init__(timeout=180)
+        super().__init__(timeout=None)
         self.bot = bot
         self.add_item(CreateLogsButton(bot))
         self.add_item(ManualLogsButton(bot))
@@ -50,18 +67,21 @@ class CreateLogsButton(discord.ui.Button):
         self.bot = bot
 
     async def callback(self, interaction: discord.Interaction):
-        # Import log_setup et créer les salons/catégories
         try:
             from log_setup import LOG_CATEGORIES
             guild = interaction.guild
             created = []
             for cat_name, channels in LOG_CATEGORIES.items():
-                category = await guild.create_category(cat_name)
+                category = discord.utils.get(guild.categories, name=cat_name)
+                if not category:
+                    category = await guild.create_category(cat_name)
                 for ch_name in channels:
-                    ch = await guild.create_text_channel(ch_name, category=category)
-                    created.append(f"{cat_name}/{ch_name}")
+                    channel = discord.utils.get(guild.text_channels, name=ch_name)
+                    if not channel:
+                        ch = await guild.create_text_channel(ch_name, category=category)
+                        created.append(f"{cat_name}/{ch_name}")
             await interaction.response.send_message(
-                f"✅ Catégories et salons créés :\n" + "\n".join(created),
+                f"✅ Catégories et salons créés :\n" + "\n".join(created) if created else "Tout existe déjà.",
                 ephemeral=True
             )
         except Exception as e:
@@ -77,11 +97,11 @@ class ManualLogsButton(discord.ui.Button):
             "Indiquez le type de log à configurer (messages, moderation, ticket, vocal, giveaway, securite) puis le salon cible.",
             ephemeral=True
         )
-        # Ici, tu peux ajouter un flow étape par étape avec discord.ui.Modal ou une suite de messages
+        # À compléter : flow étape par étape avec Modal ou messages
 
 class ConfigView(discord.ui.View):
     def __init__(self, bot):
-        super().__init__(timeout=180)
+        super().__init__(timeout=None)
         self.bot = bot
         self.add_item(SecurityButton(bot))
         self.add_item(LogsButton(bot))
@@ -122,13 +142,13 @@ class ConfigCog(commands.Cog):
     async def config(self, interaction: discord.Interaction):
         embed = discord.Embed(
             title="⚙️ Configuration de Seiko",
-            description="Choisissez une catégorie à configurer",
+            description="Configurez les différents aspects du bot",
             color=discord.Color.blurple()
         )
         await interaction.response.send_message(
             embed=embed,
-            view=ConfigView(self.bot),
-            ephemeral=True
+            view=ConfigMainView(self.bot),
+            ephemeral=False
         )
 
 async def setup(bot):

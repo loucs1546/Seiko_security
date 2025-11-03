@@ -7,6 +7,31 @@ import datetime
 import core_config as config
 from utils.logging import send_log
 
+class LogSetupModal(discord.ui.Modal):
+    def __init__(self, log_type):
+        super().__init__(title=f"Configuration des logs {log_type}")
+        self.log_type = log_type
+        self.channel = discord.ui.TextInput(
+            label="ID du salon",
+            placeholder="Entrez l'ID du salon pour ces logs",
+            required=True
+        )
+        self.add_item(self.channel)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            channel_id = int(self.channel.value)
+            config.CONFIG.setdefault("logs", {})[self.log_type] = channel_id
+            await interaction.response.send_message(
+                f"✅ Logs {self.log_type} configurés dans <#{channel_id}>",
+                ephemeral=True
+            )
+        except ValueError:
+            await interaction.response.send_message(
+                "❌ ID de salon invalide",
+                ephemeral=True
+            )
+
 class LoggingCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -350,15 +375,18 @@ class LoggingCog(commands.Cog):
         except Exception as e:
             print(f"Erreur logging commande: {e}")
 
-    @app_commands.command(name="logs", description="Affiche les logs d'un type")
-    @app_commands.describe(type="Type de log (messages, moderation, ticket, vocal, giveaway, securite)")
-    async def logs(self, interaction: discord.Interaction, type: str):
-        channel_id = interaction.guild and interaction.guild.id
-        # Ici, tu peux afficher les logs du type demandé (exemple simplifié)
-        await interaction.response.send_message(
-            f"Affichage des logs pour le type : **{type}** (fonction à compléter selon stockage des logs)",
-            ephemeral=True
-        )
+    @app_commands.command(name="logs")
+    @app_commands.describe(type="Type de logs à configurer")
+    @app_commands.choices(type=[
+        app_commands.Choice(name="Messages", value="messages"),
+        app_commands.Choice(name="Modération", value="moderation"),
+        app_commands.Choice(name="Tickets", value="ticket"),
+        app_commands.Choice(name="Vocal", value="vocal"),
+        app_commands.Choice(name="Giveaway", value="giveaway"),
+        app_commands.Choice(name="Sécurité", value="securite")
+    ])
+    async def configure_logs(self, interaction: discord.Interaction, type: str):
+        await interaction.response.send_modal(LogSetupModal(type))
 
 async def setup(bot):
     await bot.add_cog(LoggingCog(bot))
