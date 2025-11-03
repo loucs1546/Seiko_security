@@ -18,6 +18,7 @@ async def on_ready():
     # Charger les cogs
     cog_paths = [
         "cogs.logging",
+        "cogs.log_setup",                # <-- Ajout pour enregistrer /add-cat-log
         "cogs.security.antiraid",
         "cogs.security.antispam",
         "cogs.security.content_filter",
@@ -54,10 +55,28 @@ async def on_ready():
 
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
+    # Evite l'exception si l'interaction a déjà reçu une réponse
+    try:
+        already_responded = interaction.response.is_done()
+    except Exception:
+        already_responded = False
+
+    async def safe_send(content=None, embed=None, ephemeral=True):
+        try:
+            if not already_responded:
+                await interaction.response.send_message(content=content, embed=embed, ephemeral=ephemeral)
+            else:
+                await interaction.followup.send(content=content, embed=embed, ephemeral=ephemeral)
+        except Exception:
+            # dernier recours — log dans la console
+            print(f"Erreur d'envoi d'erreur: {error}")
+
     if isinstance(error, discord.app_commands.CommandNotFound):
-        await interaction.response.send_message("❌ Cette commande n'existe pas.", ephemeral=True)
+        await safe_send("❌ Cette commande n'existe pas.", ephemeral=True)
+    elif isinstance(error, discord.app_commands.MissingPermissions):
+        await safe_send("❌ Permissions insuffisantes.", ephemeral=True)
     else:
-        await interaction.response.send_message(f"❌ Une erreur est survenue: {error}", ephemeral=True)
+        await safe_send(f"❌ Une erreur est survenue: {error}", ephemeral=True)
 
 # === COMMANDES SLASH (comme /ping, /kick, etc.) ===
 
@@ -72,8 +91,21 @@ async def on_app_command_error(interaction: discord.Interaction, error: discord.
 ])
 @discord.app_commands.checks.has_permissions(administrator=True)
 async def logs(interaction: discord.Interaction, type: str, salon: discord.TextChannel):
+    # Assure l'existence de la clé logs dans la config
+    if not isinstance(config.CONFIG, dict):
+        config.CONFIG = {}
+    config.CONFIG.setdefault("logs", {})
     config.CONFIG["logs"][type] = salon.id
-    await interaction.response.send_message(f"✅ Salon **{type}** défini sur {salon.mention}.", ephemeral=True)
+
+    # Embed récapitulatif pour meilleure visibilité UI
+    embed = discord.Embed(
+        title="📌 Configuration des logs",
+        description=f"Le type **{type}** sera maintenant envoyé dans {salon.mention}.",
+        color=0x2f3136,
+        timestamp=discord.utils.utcnow()
+    )
+    embed.set_footer(text="Utilisez /logs pour modifier d'autres salons.")
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="scan-deleted", description="Récupère les suppressions récentes manquées")
 @discord.app_commands.checks.has_permissions(administrator=True)

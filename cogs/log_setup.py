@@ -22,24 +22,30 @@ class LogSetupCog(commands.Cog):
                 return
 
         try:
+            # Meilleure gestion des overwrites : s'assurer que guild.me existe, sinon utiliser bot.user
+            bot_member = guild.me or guild.get_member(self.bot.user.id)
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(read_messages=False),
+            }
+            if bot_member:
+                overwrites[bot_member] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+
             category = await guild.create_category(
                 name="🔐・Surveillance",
-                overwrites={
-                    guild.default_role: discord.PermissionOverwrite(read_messages=False),
-                    guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
-                }
+                overwrites=overwrites
             )
 
             salon_configs = [
                 ("📜・messages", "messages"),
                 ("🎤・vocal", "vocal"),
-                ("🎫・tickets", "tickets"),
+                ("🎫・tickets", "ticket"),
                 ("🛠️・commandes", "commands"),
-                ("👑・rôles", "roles"),
+                ("👑・rôles", "moderation"),
                 ("📛・profil", "profile"),
                 ("🔍・contenu", "content"),
                 ("🚨・alertes", "alerts"),
-                ("⚖️・sanctions", "sanctions")
+                ("⚖️・sanctions", "sanctions"),
+                ("🎉・giveaway", "giveaway")
             ]
 
             channel_ids = {}
@@ -47,10 +53,15 @@ class LogSetupCog(commands.Cog):
                 channel = await guild.create_text_channel(name=name, category=category)
                 channel_ids[key] = channel.id
 
-            config.LOG_CHANNELS = channel_ids
+            # Stockage cohérent : utiliser config.CONFIG["logs"] pour être retrouvé par le reste du bot
+            if not isinstance(config.CONFIG, dict):
+                config.CONFIG = {}
+            config.CONFIG.setdefault("logs", {})
+            config.CONFIG["logs"].update(channel_ids)
 
             await interaction.followup.send(
-                f"✅ Catégorie **{category.name}** créée avec {len(salon_configs)} salons !",
+                f"✅ Catégorie **{category.name}** créée avec {len(salon_configs)} salons !\n"
+                "Les salons ont été enregistrés dans la configuration.",
                 ephemeral=True
             )
 
