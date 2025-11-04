@@ -2,7 +2,7 @@
 import discord
 from discord.ext import commands
 import core_config as config
-from utils.logging import send_log
+from utils.logging import send_log_to
 from collections import defaultdict
 import time
 from config.filters import WHITELISTED_PHRASES

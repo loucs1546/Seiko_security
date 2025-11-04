@@ -2,7 +2,7 @@
 import discord
 from discord.ext import commands
 import core_config as config
-from utils.logging import send_log
+from utils.logging import send_log_to
 import time
 
 class ModerationCog(commands.Cog):

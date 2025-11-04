@@ -3,7 +3,7 @@ import discord
 from discord.ext import commands
 import core_config as config
 from config.filters import est_contenu_suspect
-from utils.logging import send_log
+from utils.logging import send_log_to
 
 class ContentFilterCog(commands.Cog):
     def __init__(self, bot):

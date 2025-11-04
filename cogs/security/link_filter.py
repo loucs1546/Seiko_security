@@ -3,7 +3,7 @@ import discord
 from discord.ext import commands
 import core_config as config
 import re
-from utils.logging import send_log
+from utils.logging import send_log_to
 from config.filters import est_url_suspecte
 
 URL_REGEX = re.compile(r"https?://[^\s]+")
