@@ -53,7 +53,7 @@ class AntiRaidCog(commands.Cog):
                         color=0xff0000,
                         timestamp=discord.utils.utcnow()
                     )
-                    await send_log(self.bot, "alerts", embed)
+                    await send_log_to(self.bot, "alerts", embed)
 
 async def setup(bot):
     await bot.add_cog(AntiRaidCog(bot))
