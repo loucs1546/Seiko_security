@@ -1,140 +1,15 @@
+# cogs/logging.py
 import discord
 from discord.ext import commands
-from discord import app_commands
 import core_config as config
-
-class DraftBotView(discord.ui.View):
-    """Vue de base avec style DraftBot"""
-    def __init__(self):
-        super().__init__(timeout=None)
-    
-    async def on_timeout(self):
-        for item in self.children:
-            item.disabled = True
-
-class ConfigMainView(DraftBotView):
-    def __init__(self, bot):
-        super().__init__()
-        self.bot = bot
-        # Ajout des boutons principaux
-        self.add_item(SecurityButton(bot))
-        self.add_item(LogsButton(bot))
-
-class SecurityView(DraftBotView):
-    def __init__(self, bot):
-        super().__init__()
-        # Ajout des toggles de sécurité
-        self.add_item(SecurityToggle("Anti-spam", "anti_spam", bot))
-        self.add_item(SecurityToggle("Anti-hack", "anti_hack", bot))
-        self.add_item(SecurityToggle("Anti-raid", "anti_raid", bot))
-        self.add_item(BackButton("Menu principal"))
-
-class SecurityToggle(discord.ui.Button):
-    def __init__(self, label, key, bot):
-        super().__init__(style=discord.ButtonStyle.secondary, label=label)
-        self.key = key
-        self.bot = bot
-        self.update_style()
-    
-    def update_style(self):
-        enabled = config.CONFIG.get("security", {}).get(self.key, False)
-        self.style = discord.ButtonStyle.success if enabled else discord.ButtonStyle.danger
-        self.label = f"{self.label.split(' ')[0]} {'✅' if enabled else '❌'}"
-
-    async def callback(self, interaction: discord.Interaction):
-        config.CONFIG.setdefault("security", {})[self.key] = not config.CONFIG["security"].get(self.key, False)
-        self.update_style()
-        await interaction.response.edit_message(view=self.view)
-
-class CloseButton(discord.ui.Button):
-    def __init__(self):
-        super().__init__(label="Fermer", style=discord.ButtonStyle.secondary)
-
-    async def callback(self, interaction: discord.Interaction):
-        await interaction.message.delete()
-
-class LogsSetupView(discord.ui.View):
-    def __init__(self, bot):
-        super().__init__(timeout=None)
-        self.bot = bot
-        self.add_item(CreateLogsButton(bot))
-        self.add_item(ManualLogsButton(bot))
-        self.add_item(CloseButton())
-
-class CreateLogsButton(discord.ui.Button):
-    def __init__(self, bot):
-        super().__init__(label="Créer", style=discord.ButtonStyle.success)
-        self.bot = bot
-
-    async def callback(self, interaction: discord.Interaction):
-        try:
-            from log_setup import LOG_CATEGORIES
-            guild = interaction.guild
-            created = []
-            for cat_name, channels in LOG_CATEGORIES.items():
-                category = discord.utils.get(guild.categories, name=cat_name)
-                if not category:
-                    category = await guild.create_category(cat_name)
-                for ch_name in channels:
-                    channel = discord.utils.get(guild.text_channels, name=ch_name)
-                    if not channel:
-                        ch = await guild.create_text_channel(ch_name, category=category)
-                        created.append(f"{cat_name}/{ch_name}")
-            await interaction.response.send_message(
-                f"✅ Catégories et salons créés :\n" + "\n".join(created) if created else "Tout existe déjà.",
-                ephemeral=True
-            )
-        except Exception as e:
-            await interaction.response.send_message(f"❌ Erreur création logs : {e}", ephemeral=True)
-
-class ManualLogsButton(discord.ui.Button):
-    def __init__(self, bot):
-        super().__init__(label="Manuellement", style=discord.ButtonStyle.primary)
-        self.bot = bot
-
-    async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_message(
-            "Indiquez le type de log à configurer (messages, moderation, ticket, vocal, giveaway, securite) puis le salon cible.",
-            ephemeral=True
-        )
-        # À compléter : flow étape par étape avec Modal ou messages
-
-class ConfigView(discord.ui.View):
-    def __init__(self, bot):
-        super().__init__(timeout=None)
-        self.bot = bot
-
-    @discord.ui.button(label="Créer", style=discord.ButtonStyle.green, custom_id="config:create")
-    async def create_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        log_setup = self.bot.get_cog("LogSetupCog")
-        if log_setup:
-            await log_setup._create_category(interaction)
-        else:
-            await interaction.response.send_message("❌ Système de logs non disponible", ephemeral=True)
-
-class ConfigCog(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
-
-    @app_commands.command(name="config", description="Configure le bot")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def config(self, interaction: discord.Interaction):
-        embed = discord.Embed(
-            title="⚙️ Configuration de Seiko",
-            description="Configurez les différents aspects du bot",
-            color=discord.Color.blurple()
-        )
-        await interaction.response.send_message(
-            embed=embed,
-            view=ConfigMainView(self.bot),
-            ephemeral=False
-        )
+from utils.logging import send_log_to
 
 class LoggingCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
     async def get_voice_action_author(self, guild, target_id, max_age_seconds=15):
+        """Récupère l'auteur d'une action vocale (déplacement, déconnexion) depuis les logs d'audit."""
         try:
             async for entry in guild.audit_logs(limit=10):
                 if entry.target.id != target_id:
@@ -149,7 +24,17 @@ class LoggingCog(commands.Cog):
                 if entry.action == discord.AuditLogAction.member_update:
                     if hasattr(entry.changes, 'channel_id'):
                         return entry.user
-        except:
+        except Exception:
+            pass
+        return None
+
+    async def get_audit_author(self, guild, target_id, action_type, max_age_seconds=15):
+        """Récupère l'auteur d'une action spécifique depuis les logs d'audit."""
+        try:
+            async for entry in guild.audit_logs(action=action_type, limit=10):
+                if entry.target.id == target_id and (discord.utils.utcnow() - entry.created_at).total_seconds() < max_age_seconds:
+                    return entry.user
+        except Exception:
             pass
         return None
 
@@ -167,8 +52,215 @@ class LoggingCog(commands.Cog):
             embed.add_field(name="Contenu", value=message.content[:1020], inline=False)
         await send_log_to(self.bot, "messages", embed)
 
+    @commands.Cog.listener()
+    async def on_message_edit(self, before, after):
+        if not after.guild or after.guild.id != config.GUILD_ID or after.author.bot or before.content == after.content:
+            return
+        embed = discord.Embed(
+            title="✏️ Message édité",
+            description=f"Par {after.author.mention} dans {after.channel.mention}",
+            color=0xffff00,
+            timestamp=discord.utils.utcnow()
+        )
+        embed.add_field(name="Avant", value=before.content[:1020] or "*(vide)*", inline=False)
+        embed.add_field(name="Après", value=after.content[:1020] or "*(vide)*", inline=False)
+        await send_log_to(self.bot, "messages", embed)
+
+    @commands.Cog.listener()
+    async def on_message_delete(self, message):
+        if not message.guild or message.guild.id != config.GUILD_ID or message.author.bot:
+            return
+
+        embed = discord.Embed(
+            title="🗑️ Message supprimé",
+            description=f"**Auteur** : {message.author.mention}\n**Salon** : {message.channel.mention}",
+            color=0xff8800,
+            timestamp=discord.utils.utcnow()
+        )
+        if message.content:
+            embed.add_field(name="Contenu", value=message.content[:1020], inline=False)
+        await send_log_to(self.bot, "messages", embed)
+
+        # Logs de modération si supprimé par un autre utilisateur
+        deleter = None
+        try:
+            async for entry in message.guild.audit_logs(limit=5, action=discord.AuditLogAction.message_delete):
+                if entry.target.id == message.author.id and (discord.utils.utcnow() - entry.created_at).total_seconds() < 10:
+                    deleter = entry.user
+                    break
+        except:
+            pass
+
+        if deleter and deleter.id != message.author.id:
+            mod_embed = discord.Embed(
+                title="🗑️ Message supprimé (modération)",
+                description=f"**Modérateur** : {deleter.mention}\n**Auteur** : {message.author.mention}\n**Salon** : {message.channel.mention}",
+                color=0xff9900,
+                timestamp=discord.utils.utcnow()
+            )
+            if message.content:
+                mod_embed.add_field(name="Contenu", value=message.content[:1020], inline=False)
+            await send_log_to(self.bot, "moderation", mod_embed)
+
+    @commands.Cog.listener()
+    async def on_member_update(self, before, after):
+        if before.guild.id != config.GUILD_ID:
+            return
+
+        # Changement de pseudo
+        if before.nick != after.nick:
+            moderator = await self.get_audit_author(
+                after.guild,
+                after.id,
+                discord.AuditLogAction.member_update,
+                max_age_seconds=15
+            )
+            old_nick = before.nick or before.global_name or before.name
+            new_nick = after.nick or after.global_name or after.name
+            embed = discord.Embed(
+                title="📛 Pseudo modifié",
+                description=f"{after.mention}",
+                color=0x00ccff,
+                timestamp=discord.utils.utcnow()
+            )
+            embed.add_field(name="Avant", value=old_nick, inline=True)
+            embed.add_field(name="Après", value=new_nick, inline=True)
+            embed.add_field(name="Fait par", value=moderator.mention if moderator else "Inconnu", inline=False)
+            await send_log_to(self.bot, "profile", embed)
+
+            if moderator and moderator.id != after.id:
+                mod_embed = discord.Embed(
+                    title="📛 Pseudo modifié (modération)",
+                    description=f"**Modérateur** : {moderator.mention}\n**Membre** : {after.mention}\n**Avant** : {old_nick}\n**Après** : {new_nick}",
+                    color=0x00ccff,
+                    timestamp=discord.utils.utcnow()
+                )
+                await send_log_to(self.bot, "moderation", mod_embed)
+
+        # Changement d'avatar
+        if before.avatar != after.avatar:
+            embed = discord.Embed(
+                title="🖼️ Avatar modifié",
+                description=f"{after.mention}",
+                color=0x00ccff,
+                timestamp=discord.utils.utcnow()
+            )
+            embed.set_thumbnail(url=after.display_avatar.url)
+            await send_log_to(self.bot, "profile", embed)
+
+        # Changement de rôles
+        before_roles = set(before.roles)
+        after_roles = set(after.roles)
+        if before_roles != after_roles:
+            moderator = await self.get_audit_author(
+                after.guild,
+                after.id,
+                discord.AuditLogAction.member_role_update,
+                max_age_seconds=15
+            )
+            added = after_roles - before_roles
+            removed = before_roles - after_roles
+            desc = ""
+            if added:
+                desc += "➕ Ajoutés : " + ", ".join(r.mention for r in added) + "\n"
+            if removed:
+                desc += "➖ Retirés : " + ", ".join(r.mention for r in removed)
+            if desc:
+                embed = discord.Embed(
+                    title="👑 Rôles modifiés",
+                    description=f"{after.mention}\n{desc}**Fait par** : {moderator.mention if moderator else 'Inconnu'}",
+                    color=0xffaa00,
+                    timestamp=discord.utils.utcnow()
+                )
+                await send_log_to(self.bot, "roles", embed)
+
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member, before, after):
+        if member.guild.id != config.GUILD_ID:
+            return
+
+        now = discord.utils.utcnow()
+
+        # Connexion
+        if before.channel is None and after.channel is not None:
+            embed = discord.Embed(
+                title="🎤 Connexion vocale",
+                description=f"{member.mention} a rejoint {after.channel.mention}\n**Fait par** : {member.mention}",
+                color=0x00ff00,
+                timestamp=now
+            )
+            await send_log_to(self.bot, "vocal", embed)
+
+        # Déconnexion
+        elif before.channel is not None and after.channel is None:
+            moderator = await self.get_voice_action_author(member.guild, member.id)
+            fait_par = moderator.mention if moderator else member.mention
+            embed = discord.Embed(
+                title="🎤 Déconnexion vocale",
+                description=f"{member.mention} a quitté {before.channel.mention}\n**Fait par** : {fait_par}",
+                color=0xff0000,
+                timestamp=now
+            )
+            await send_log_to(self.bot, "vocal", embed)
+
+        # Déplacement
+        elif before.channel and after.channel and before.channel != after.channel:
+            moderator = await self.get_voice_action_author(member.guild, member.id)
+            fait_par = moderator.mention if moderator else member.mention
+            embed = discord.Embed(
+                title="🎤 Déplacement vocal",
+                description=f"{member.mention} : {before.channel.mention} → {after.channel.mention}\n**Fait par** : {fait_par}",
+                color=0xffff00,
+                timestamp=now
+            )
+            await send_log_to(self.bot, "vocal", embed)
+
+        # Mute / Deafen
+        elif before.mute != after.mute or before.deaf != after.deaf:
+            moderator = await self.get_audit_author(
+                member.guild,
+                member.id,
+                discord.AuditLogAction.member_update,
+                max_age_seconds=15
+            )
+            actions = []
+            if before.mute != after.mute:
+                actions.append("mute vocal" if after.mute else "unmute vocal")
+            if before.deaf != after.deaf:
+                actions.append("sourdine" if after.deaf else "fin de sourdine")
+            fait_par = moderator.mention if moderator else "Inconnu"
+            embed = discord.Embed(
+                title="🎤 État vocal modifié",
+                description=f"{member.mention} — {', '.join(actions)}\n**Fait par** : {fait_par}",
+                color=0x1abc9c,
+                timestamp=now
+            )
+            await send_log_to(self.bot, "vocal", embed)
+
+    @commands.Cog.listener()
+    async def on_interaction(self, interaction: discord.Interaction):
+        if not interaction.guild or interaction.guild.id != config.GUILD_ID or interaction.type != discord.InteractionType.application_command:
+            return
+
+        args = []
+        if interaction.data.get("options"):
+            for opt in interaction.data["options"]:
+                if opt["type"] in (6, 7, 8):
+                    args.append(f"{opt['name']}: <@{opt['value']}>")
+                else:
+                    args.append(f"{opt['name']}: {opt['value']}")
+
+        full_command = f"/{interaction.command.name}"
+        if args:
+            full_command += " " + " ".join(args)
+
+        embed = discord.Embed(
+            title="🛠️ Commande slash détectée",
+            description=f"**Utilisateur** : {interaction.user.mention}\n**Commande complète** :\n```\n{full_command}\n```",
+            color=0x2ecc71,
+            timestamp=discord.utils.utcnow()
+        )
+        await send_log_to(self.bot, "commands", embed)
+
 async def setup(bot):
-    await bot.add_cog(ConfigCog(bot))
-    # Enregistrer la view pour que les boutons persistent
-    bot.add_view(ConfigView(bot))
-    bot.add_cog(LoggingCog(bot))
+    await bot.add_cog(LoggingCog(bot))

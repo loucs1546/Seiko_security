@@ -3,7 +3,7 @@ import discord
 from discord.ext import commands
 import core_config as config
 import re
-from utils.logging import send_log_to
+from utils.logging import send_log_to  # ← send_log_to
 from config.filters import est_url_suspecte
 
 URL_REGEX = re.compile(r"https?://[^\s]+")
@@ -16,34 +16,23 @@ class LinkFilterCog(commands.Cog):
     async def on_message(self, message):
         if message.author.bot or not message.guild or message.guild.id != config.GUILD_ID:
             return
-
         urls = URL_REGEX.findall(message.content)
         if not urls:
             return
-
         try:
             await message.delete()
-            # ✅ Loguer ICI
             embed = discord.Embed(
                 title="🗑️ Message supprimé (lien suspect)",
-                description=f"**Auteur** : {message.author.mention}\n"
-                            f"**Salon** : {message.channel.mention}\n"
-                            f"**Supprimé par** : {self.bot.user.mention} (bot)",
+                description=f"**Auteur** : {message.author.mention}\n**Salon** : {message.channel.mention}\n**Supprimé par** : {self.bot.user.mention} (bot)",
                 color=0xff6600,
                 timestamp=discord.utils.utcnow()
             )
             if message.content:
                 embed.add_field(name="Contenu", value=message.content[:1020], inline=False)
-            await send_log(self.bot, "messages", embed)
-
-            await message.channel.send(
-                f"{message.author.mention}, votre message contient un lien suspect et a été supprimé.",
-                delete_after=5
-            )
+            await send_log_to(self.bot, "messages", embed)  # ← send_log_to
+            await message.channel.send(f"{message.author.mention}, votre message contient un lien suspect et a été supprimé.", delete_after=5)
         except Exception:
             pass
-
-        # On ne logue plus ici (déjà fait ci-dessus)
 
 async def setup(bot):
     await bot.add_cog(LinkFilterCog(bot))
