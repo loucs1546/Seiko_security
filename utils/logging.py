@@ -1,35 +1,20 @@
 # utils/logging.py
 import asyncio
-from typing import Optional, Union
 import discord
 import core_config as config
 
-async def _send_to_channel(bot: discord.Client, channel_id: int, content: Union[str, discord.Embed], *, mention: Optional[str]=None) -> bool:
-    try:
-        channel = bot.get_channel(channel_id)
-        if channel is None:
-            channel = await bot.fetch_channel(channel_id)
-        if isinstance(content, discord.Embed):
-            await channel.send(content=mention or None, embed=content)
-        else:
-            text = f"{mention or ''}{content}"
-            await channel.send(text)
-        return True
-    except Exception:
-        return False
-
-async def send_log_to(bot: discord.Client, log_type: str, content: Union[str, discord.Embed], *, mention: Optional[str]=None) -> bool:
-    """
-    Envoie un message ou embed dans le salon configuré pour `log_type`.
-    Retourne True si l'envoi s'est bien passé, False sinon.
-    """
+async def send_log_to(bot, log_type: str, content):
     channel_id = config.CONFIG.get("logs", {}).get(log_type)
     if not channel_id:
         return False
-    return await _send_to_channel(bot, channel_id, content, mention=mention)
-
-def send_log(bot: discord.Client, log_type: str, content: Union[str, discord.Embed], *, mention: Optional[str]=None):
-    """
-    Wrapper synchrone qui planifie l'envoi asynchrone (compatibilité avec du code non-await).
-    """
-    return asyncio.create_task(send_log_to(bot, log_type, content, mention=mention))
+    channel = bot.get_channel(channel_id)
+    if not channel:
+        return False
+    try:
+        if isinstance(content, discord.Embed):
+            await channel.send(embed=content)
+        else:
+            await channel.send(content)
+        return True
+    except:
+        return False

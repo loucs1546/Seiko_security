@@ -130,7 +130,45 @@ class ConfigCog(commands.Cog):
             ephemeral=False
         )
 
+class LoggingCog(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    async def get_voice_action_author(self, guild, target_id, max_age_seconds=15):
+        try:
+            async for entry in guild.audit_logs(limit=10):
+                if entry.target.id != target_id:
+                    continue
+                if (discord.utils.utcnow() - entry.created_at).total_seconds() > max_age_seconds:
+                    continue
+                if entry.action in (
+                    discord.AuditLogAction.member_disconnect,
+                    discord.AuditLogAction.member_move
+                ):
+                    return entry.user
+                if entry.action == discord.AuditLogAction.member_update:
+                    if hasattr(entry.changes, 'channel_id'):
+                        return entry.user
+        except:
+            pass
+        return None
+
+    @commands.Cog.listener()
+    async def on_message(self, message):
+        if not message.guild or message.guild.id != config.GUILD_ID or message.author.id == self.bot.user.id:
+            return
+        embed = discord.Embed(
+            title="📥 Message reçu",
+            description=f"**Auteur** : {message.author.mention}\n**Salon** : {message.channel.mention}",
+            color=0x2ecc71,
+            timestamp=message.created_at
+        )
+        if message.content:
+            embed.add_field(name="Contenu", value=message.content[:1020], inline=False)
+        await send_log_to(self.bot, "messages", embed)
+
 async def setup(bot):
     await bot.add_cog(ConfigCog(bot))
     # Enregistrer la view pour que les boutons persistent
     bot.add_view(ConfigView(bot))
+    bot.add_cog(LoggingCog(bot))
