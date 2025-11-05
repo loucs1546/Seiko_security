@@ -30,7 +30,7 @@ class LogSetupCog(commands.Cog):
                 overwrites[bot_member] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
 
             category = await guild.create_category(
-                name="🔐・Surveillance",
+                name="𓆩𖤍𓆪۰⟣ SURVEILLANCES ⟢۰𓆩𖤍𓆪",
                 overwrites=overwrites
             )
 
