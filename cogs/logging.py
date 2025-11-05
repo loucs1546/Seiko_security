@@ -107,7 +107,7 @@ class LoggingCog(commands.Cog):
         # Si c'est le bot qui a supprimé le message, loguer aussi dans "securite"
         if deleter.id == self.bot.user.id:
             await send_log_to(self.bot, "securite", embed)
-
+#
     @commands.Cog.listener()
     async def on_member_update(self, before, after):
         if before.guild.id != config.GUILD_ID:
