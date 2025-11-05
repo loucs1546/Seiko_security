@@ -68,20 +68,10 @@ class LoggingCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message_delete(self, message):
-        if not message.guild or message.guild.id != config.GUILD_ID or message.author.bot:
+        if not message.guild or message.guild.id != config.GUILD_ID:
             return
 
-        embed = discord.Embed(
-            title="🗑️ Message supprimé",
-            description=f"**Auteur** : {message.author.mention}\n**Salon** : {message.channel.mention}",
-            color=0xff8800,
-            timestamp=discord.utils.utcnow()
-        )
-        if message.content:
-            embed.add_field(name="Contenu", value=message.content[:1020], inline=False)
-        await send_log_to(self.bot, "messages", embed)
-
-        # Logs de modération si supprimé par un autre utilisateur
+        # Récupérer l'auteur de la suppression
         deleter = None
         try:
             async for entry in message.guild.audit_logs(limit=5, action=discord.AuditLogAction.message_delete):
@@ -91,81 +81,60 @@ class LoggingCog(commands.Cog):
         except:
             pass
 
-        if deleter and deleter.id != message.author.id:
-            mod_embed = discord.Embed(
-                title="🗑️ Message supprimé (modération)",
-                description=f"**Modérateur** : {deleter.mention}\n**Auteur** : {message.author.mention}\n**Salon** : {message.channel.mention}",
-                color=0xff9900,
-                timestamp=discord.utils.utcnow()
-            )
-            if message.content:
-                mod_embed.add_field(name="Contenu", value=message.content[:1020], inline=False)
-            await send_log_to(self.bot, "moderation", mod_embed)
+        # Si le bot a supprimé le message, on le sait déjà (anti-spam, etc.)
+        # Sinon, par défaut, c'est l'auteur lui-même
+        if deleter is None:
+            deleter = message.author
+
+        # Créer l'embed
+        embed = discord.Embed(
+            title="🗑️ Message supprimé",
+            description=f"**Auteur** : {message.author.mention}\n"
+                        f"**Salon** : {message.channel.mention}\n"
+                        f"**Fait par** : {deleter.mention}",
+            color=0xff8800,
+            timestamp=message.created_at
+        )
+        if message.content:
+            embed.add_field(name="Contenu", value=message.content, inline=False)
+        if message.attachments:
+            urls = "\n".join(a.url for a in message.attachments)
+            embed.add_field(name="Pièces jointes", value=urls, inline=False)
+
+        # Envoyer dans le salon "messages"
+        await send_log_to(self.bot, "messages", embed)
+
+        # Si c'est le bot qui a supprimé le message, loguer aussi dans "securite"
+        if deleter.id == self.bot.user.id:
+            await send_log_to(self.bot, "securite", embed)
 
     @commands.Cog.listener()
     async def on_member_update(self, before, after):
         if before.guild.id != config.GUILD_ID:
             return
 
-        # Changement de pseudo
-        if before.nick != after.nick:
-            moderator = await self.get_audit_author(
-                after.guild,
-                after.id,
-                discord.AuditLogAction.member_update,
-                max_age_seconds=15
-            )
-            old_nick = before.nick or before.global_name or before.name
-            new_nick = after.nick or after.global_name or after.name
-            embed = discord.Embed(
-                title="📛 Pseudo modifié",
-                description=f"{after.mention}",
-                color=0x00ccff,
-                timestamp=discord.utils.utcnow()
-            )
-            embed.add_field(name="Avant", value=old_nick, inline=True)
-            embed.add_field(name="Après", value=new_nick, inline=True)
-            embed.add_field(name="Fait par", value=moderator.mention if moderator else "Inconnu", inline=False)
-            await send_log_to(self.bot, "profile", embed)
-
-            if moderator and moderator.id != after.id:
-                mod_embed = discord.Embed(
-                    title="📛 Pseudo modifié (modération)",
-                    description=f"**Modérateur** : {moderator.mention}\n**Membre** : {after.mention}\n**Avant** : {old_nick}\n**Après** : {new_nick}",
-                    color=0x00ccff,
-                    timestamp=discord.utils.utcnow()
-                )
-                await send_log_to(self.bot, "moderation", mod_embed)
-
-        # Changement d'avatar
-        if before.avatar != after.avatar:
-            embed = discord.Embed(
-                title="🖼️ Avatar modifié",
-                description=f"{after.mention}",
-                color=0x00ccff,
-                timestamp=discord.utils.utcnow()
-            )
-            embed.set_thumbnail(url=after.display_avatar.url)
-            await send_log_to(self.bot, "profile", embed)
-
-        # Changement de rôles
+        # --- Rôles ---
         before_roles = set(before.roles)
         after_roles = set(after.roles)
         if before_roles != after_roles:
-            moderator = await self.get_audit_author(
-                after.guild,
-                after.id,
-                discord.AuditLogAction.member_role_update,
-                max_age_seconds=15
-            )
+            moderator = None
+            try:
+                async for entry in after.guild.audit_logs(limit=5, action=discord.AuditLogAction.member_role_update):
+                    if entry.target.id == after.id and (discord.utils.utcnow() - entry.created_at).total_seconds() < 10:
+                        moderator = entry.user
+                        break
+            except:
+                pass
+
             added = after_roles - before_roles
             removed = before_roles - after_roles
-            desc = ""
-            if added:
-                desc += "➕ Ajoutés : " + ", ".join(r.mention for r in added) + "\n"
-            if removed:
-                desc += "➖ Retirés : " + ", ".join(r.mention for r in removed)
-            if desc:
+            if added or removed:
+                desc = ""
+                if added:
+                    desc += "➕ Ajoutés : " + ", ".join(r.mention for r in added) + "\n"
+                if removed:
+                    desc += "➖ Retirés : " + ", ".join(r.mention for r in removed)
+
                 embed = discord.Embed(
                     title="👑 Rôles modifiés",
                     description=f"{after.mention}\n{desc}**Fait par** : {moderator.mention if moderator else 'Inconnu'}",
@@ -173,6 +142,28 @@ class LoggingCog(commands.Cog):
                     timestamp=discord.utils.utcnow()
                 )
                 await send_log_to(self.bot, "roles", embed)
+
+        # --- Pseudo ---
+        if before.nick != after.nick:
+            moderator = None
+            try:
+                async for entry in after.guild.audit_logs(limit=5, action=discord.AuditLogAction.member_update):
+                    if entry.target.id == after.id and hasattr(entry.changes, 'nick') and (discord.utils.utcnow() - entry.created_at).total_seconds() < 10:
+                        moderator = entry.user
+                        break
+            except:
+                pass
+
+            old_nick = before.nick or before.global_name or before.name
+            new_nick = after.nick or after.global_name or after.name
+
+            embed = discord.Embed(
+                title="📛 Pseudo modifié",
+                description=f"{after.mention}\n**Avant** : {old_nick}\n**Après** : {new_nick}\n**Fait par** : {moderator.mention if moderator else 'Inconnu'}",
+                color=0x00ccff,
+                timestamp=discord.utils.utcnow()
+            )
+            await send_log_to(self.bot, "profile", embed)
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
