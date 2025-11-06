@@ -41,20 +41,22 @@ class LoggingCog(commands.Cog):
         if not message.guild or message.guild.id != config.GUILD_ID:
             return
 
-        # Récupérer qui a supprimé le message
+        # Récupérer l'auteur de la suppression
         deleter = None
         try:
             async for entry in message.guild.audit_logs(limit=5, action=discord.AuditLogAction.message_delete):
                 if entry.target.id == message.author.id and (discord.utils.utcnow() - entry.created_at).total_seconds() < 10:
                     deleter = entry.user
                     break
-        except Exception:
+        except:
             pass
 
-        # Si on ne sait pas, c'est probablement l'auteur lui-même
+        # Si le bot a supprimé le message, on le sait déjà (anti-spam, etc.)
+        # Sinon, par défaut, c'est l'auteur lui-même
         if deleter is None:
             deleter = message.author
 
+        # Créer l'embed
         embed = discord.Embed(
             title="🗑️ Message supprimé",
             description=f"**Auteur** : {message.author.mention}\n"
@@ -69,9 +71,10 @@ class LoggingCog(commands.Cog):
             urls = "\n".join(a.url for a in message.attachments)
             embed.add_field(name="Pièces jointes", value=urls, inline=False)
 
+        # Envoyer dans le salon "messages"
         await send_log_to(self.bot, "messages", embed)
 
-        # Si c'est le bot qui a supprimé, loguer aussi en sécurité
+        # Si c'est le bot qui a supprimé le message, loguer aussi dans "securite"
         if deleter.id == self.bot.user.id:
             await send_log_to(self.bot, "securite", embed)
 
@@ -80,7 +83,7 @@ class LoggingCog(commands.Cog):
         if before.guild.id != config.GUILD_ID:
             return
 
-        # === RÔLES ===
+        # --- Rôles ---
         before_roles = set(before.roles)
         after_roles = set(after.roles)
         if before_roles != after_roles:
@@ -90,7 +93,7 @@ class LoggingCog(commands.Cog):
                     if entry.target.id == after.id and (discord.utils.utcnow() - entry.created_at).total_seconds() < 10:
                         moderator = entry.user
                         break
-            except Exception:
+            except:
                 pass
 
             added = after_roles - before_roles
@@ -108,18 +111,17 @@ class LoggingCog(commands.Cog):
                     color=0xffaa00,
                     timestamp=discord.utils.utcnow()
                 )
-                await send_log_to(self.bot, "moderation", embed)
+                await send_log_to(self.bot, "roles", embed)
 
-        # === PSEUDO ===
+        # --- Pseudo ---
         if before.nick != after.nick:
             moderator = None
             try:
                 async for entry in after.guild.audit_logs(limit=5, action=discord.AuditLogAction.member_update):
-                    if entry.target.id == after.id and (discord.utils.utcnow() - entry.created_at).total_seconds() < 10:
-                        # On suppose que si c'est un member_update récent, c'est bien le modérateur
+                    if entry.target.id == after.id and hasattr(entry.changes, 'nick') and (discord.utils.utcnow() - entry.created_at).total_seconds() < 10:
                         moderator = entry.user
                         break
-            except Exception:
+            except:
                 pass
 
             old_nick = before.nick or before.global_name or before.name
@@ -131,17 +133,6 @@ class LoggingCog(commands.Cog):
                 color=0x00ccff,
                 timestamp=discord.utils.utcnow()
             )
-            await send_log_to(self.bot, "profile", embed)
-
-        # === AVATAR ===
-        if before.avatar != after.avatar:
-            embed = discord.Embed(
-                title="🖼️ Avatar modifié",
-                description=f"{after.mention}",
-                color=0x00ccff,
-                timestamp=discord.utils.utcnow()
-            )
-            embed.set_thumbnail(url=after.display_avatar.url)
             await send_log_to(self.bot, "profile", embed)
 
     @commands.Cog.listener()
