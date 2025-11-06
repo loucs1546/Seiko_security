@@ -102,7 +102,7 @@ class ModerationCommandsCog(commands.Cog):
             from utils.views import ContentReviewView
             view = ContentReviewView(raison, pseudo, interaction.channel, self.bot)
             await send_log_to(self.bot, "bavures", embed)
-            await send_log_to(self.bot, "bavures", view=view)
+            await send_log_to(self.bot, "bavures", embed, view=view)
             await interaction.response.send_message("❌ La raison est invalide (moins de 2 mots ou texte aléatoire).", ephemeral=True)
             return
 
@@ -135,7 +135,7 @@ class ModerationCommandsCog(commands.Cog):
             from utils.views import ContentReviewView
             view = ContentReviewView(raison, pseudo, interaction.channel, self.bot)
             await send_log_to(self.bot, "bavures", embed)
-            await send_log_to(self.bot, "bavures", view=view)
+            await send_log_to(self.bot, "bavures", embed, view=view)
             await interaction.response.send_message("❌ La raison est invalide (moins de 2 mots ou texte aléatoire).", ephemeral=True)
             return
 
@@ -168,7 +168,7 @@ class ModerationCommandsCog(commands.Cog):
             from utils.views import ContentReviewView
             view = ContentReviewView(raison, pseudo, interaction.channel, self.bot)
             await send_log_to(self.bot, "bavures", embed)
-            await send_log_to(self.bot, "bavures", view=view)
+            await send_log_to(self.bot, "bavures", embed, view=view)
             await interaction.response.send_message("❌ La raison est invalide (moins de 2 mots ou texte aléatoire).", ephemeral=True)
             return
 
