@@ -45,36 +45,32 @@ class ModerationCog(commands.Cog):
     # === ANTI-SPAM ===
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.author.bot or not message.guild or message.guild.id != config.GUILD_ID:
+        # Ignore les messages du bot lui-même pour éviter les boucles
+        if message.author.id == self.bot.user.id or not message.guild:
             return
 
-        settings = self.get_settings(message.guild.id)
-        if not settings["anti_spam"]:
+        # Vérifie si le message vient du salon "sanctions"
+        sanctions_channel_id = config.CONFIG["logs"].get("sanctions")
+        if not sanctions_channel_id or message.channel.id != sanctions_channel_id:
             return
 
-        uid = message.author.id
-        now = time.time()
+        # Vérifie si c'est un embed de sanction
+        if message.embeds:
+            embed = message.embeds[0]
+            if embed.description and "Raison : " in embed.description:
+                # Extrait la raison
+                lines = embed.description.split("\n")
+                raison_line = next((line for line in lines if line.startswith("**Raison** : ")), None)
+                if raison_line:
+                    # "Raison : ..." → on prend ce qui est après les ": "
+                    raison = raison_line.split(": ", 1)[1].strip()
 
-        # Nettoyer l'historique
-        if uid not in self.user_messages:
-            self.user_messages[uid] = []
-        self.user_messages[uid] = [t for t in self.user_messages[uid] if now - t < 5]
-        self.user_messages[uid].append(now)
-
-        if len(self.user_messages[uid]) > 5:
-            try:
-                await message.delete()
-                await message.channel.send(f"{message.author.mention}, ne spammez pas.", delete_after=5)
-                embed = discord.Embed(
-                    title="🚫 SPAM BLOQUÉ",
-                    description=f"Par {message.author.mention}",
-                    color=0xff0000,
-                    timestamp=discord.utils.utcnow()
-                )
-                embed.add_field(name="Contenu", value=message.content[:1020])
-                await send_log(self.bot, "threats", embed)
-            except Exception:
-                pass
+                    # Vérifie si la raison est invalide
+                    if not raison or len(raison.strip()) == 0 or (len(raison.strip()) == 1 and raison.strip().isalpha()):
+                        # Envoie dans "bavures"
+                        bavures_ch = self.bot.get_channel(config.CONFIG["logs"].get("bavures"))
+                        if bavures_ch:
+                            await bavures_ch.send(embed=embed)
 
     # === ANTI-RAID & ANTI-HACK ===
     @commands.Cog.listener()
