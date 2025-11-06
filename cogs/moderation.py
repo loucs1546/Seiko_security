@@ -92,7 +92,7 @@ class ModerationCog(commands.Cog):
                     color=0xff0000,
                     timestamp=discord.utils.utcnow()
                 )
-                await send_log(self.bot, "threats", embed)
+                await send_log_to(self.bot, "threats", embed)
 
         # ANTI-HACK
         if settings["anti_hack"]:
@@ -107,7 +107,7 @@ class ModerationCog(commands.Cog):
                         color=0x9b59b6,
                         timestamp=discord.utils.utcnow()
                     )
-                    await send_log(self.bot, "threats", embed)
+                    await send_log_to(self.bot, "threats", embed)
                 except Exception:
                     pass
 
