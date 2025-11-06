@@ -41,7 +41,6 @@ class LoggingCog(commands.Cog):
         if not message.guild or message.guild.id != config.GUILD_ID:
             return
 
-        # Récupérer l'auteur de la suppression
         deleter = None
         try:
             async for entry in message.guild.audit_logs(limit=5, action=discord.AuditLogAction.message_delete):
@@ -51,12 +50,9 @@ class LoggingCog(commands.Cog):
         except:
             pass
 
-        # Si le bot a supprimé le message, on le sait déjà (anti-spam, etc.)
-        # Sinon, par défaut, c'est l'auteur lui-même
         if deleter is None:
             deleter = message.author
 
-        # Créer l'embed
         embed = discord.Embed(
             title="🗑️ Message supprimé",
             description=f"**Auteur** : {message.author.mention}\n"
@@ -71,10 +67,8 @@ class LoggingCog(commands.Cog):
             urls = "\n".join(a.url for a in message.attachments)
             embed.add_field(name="Pièces jointes", value=urls, inline=False)
 
-        # Envoyer dans le salon "messages"
         await send_log_to(self.bot, "messages", embed)
 
-        # Si c'est le bot qui a supprimé le message, loguer aussi dans "securite"
         if deleter.id == self.bot.user.id:
             await send_log_to(self.bot, "securite", embed)
 
@@ -83,7 +77,36 @@ class LoggingCog(commands.Cog):
         if before.guild.id != config.GUILD_ID:
             return
 
-        # --- Rôles ---
+        # === PSEUDO MODIFIÉ (CORRIGÉ) ===
+        if before.nick != after.nick:
+            moderator = None
+            try:
+                async for entry in after.guild.audit_logs(limit=5, action=discord.AuditLogAction.member_update):
+                    if (
+                        entry.target.id == after.id and
+                        hasattr(entry.changes, 'nick') and
+                        entry.changes.nick[0] == before.nick and
+                        entry.changes.nick[1] == after.nick and
+                        (discord.utils.utcnow() - entry.created_at).total_seconds() < 10
+                    ):
+                        moderator = entry.user
+                        break
+            except Exception:
+                pass
+
+            # ✅ Récupère le vrai nom (pas "Aucun")
+            old_nick = before.nick or before.global_name or before.name
+            new_nick = after.nick or after.global_name or after.name
+
+            embed = discord.Embed(
+                title="📛 Pseudo modifié",
+                description=f"{after.mention}\n**Avant** : {old_nick}\n**Après** : {new_nick}\n**Fait par** : {moderator.mention if moderator else 'Inconnu'}",
+                color=0x00ccff,
+                timestamp=discord.utils.utcnow()
+            )
+            await send_log_to(self.bot, "profile", embed)
+
+        # === RÔLES ===
         before_roles = set(before.roles)
         after_roles = set(after.roles)
         if before_roles != after_roles:
@@ -93,7 +116,7 @@ class LoggingCog(commands.Cog):
                     if entry.target.id == after.id and (discord.utils.utcnow() - entry.created_at).total_seconds() < 10:
                         moderator = entry.user
                         break
-            except:
+            except Exception:
                 pass
 
             added = after_roles - before_roles
@@ -111,28 +134,17 @@ class LoggingCog(commands.Cog):
                     color=0xffaa00,
                     timestamp=discord.utils.utcnow()
                 )
-                await send_log_to(self.bot, "roles", embed)
+                await send_log_to(self.bot, "moderation", embed)
 
-        # --- Pseudo ---
-        if before.nick != after.nick:
-            moderator = None
-            try:
-                async for entry in after.guild.audit_logs(limit=5, action=discord.AuditLogAction.member_update):
-                    if entry.target.id == after.id and hasattr(entry.changes, 'nick') and (discord.utils.utcnow() - entry.created_at).total_seconds() < 10:
-                        moderator = entry.user
-                        break
-            except:
-                pass
-
-            old_nick = before.nick or before.global_name or before.name
-            new_nick = after.nick or after.global_name or after.name
-
+        # === AVATAR ===
+        if before.avatar != after.avatar:
             embed = discord.Embed(
-                title="📛 Pseudo modifié",
-                description=f"{after.mention}\n**Avant** : {old_nick}\n**Après** : {new_nick}\n**Fait par** : {moderator.mention if moderator else 'Inconnu'}",
+                title="🖼️ Avatar modifié",
+                description=f"{after.mention}",
                 color=0x00ccff,
                 timestamp=discord.utils.utcnow()
             )
+            embed.set_thumbnail(url=after.display_avatar.url)
             await send_log_to(self.bot, "profile", embed)
 
     @commands.Cog.listener()
@@ -142,7 +154,6 @@ class LoggingCog(commands.Cog):
 
         now = discord.utils.utcnow()
 
-        # Connexion
         if before.channel is None and after.channel is not None:
             embed = discord.Embed(
                 title="🎤 Connexion vocale",
@@ -152,7 +163,6 @@ class LoggingCog(commands.Cog):
             )
             await send_log_to(self.bot, "vocal", embed)
 
-        # Déconnexion
         elif before.channel is not None and after.channel is None:
             moderator = None
             try:
@@ -172,7 +182,6 @@ class LoggingCog(commands.Cog):
             )
             await send_log_to(self.bot, "vocal", embed)
 
-        # Déplacement
         elif before.channel and after.channel and before.channel != after.channel:
             moderator = None
             try:
@@ -192,7 +201,6 @@ class LoggingCog(commands.Cog):
             )
             await send_log_to(self.bot, "vocal", embed)
 
-        # Mute / Deafen
         elif before.mute != after.mute or before.deaf != after.deaf:
             moderator = None
             try:
@@ -223,21 +231,33 @@ class LoggingCog(commands.Cog):
         if not interaction.guild or interaction.guild.id != config.GUILD_ID or interaction.type != discord.InteractionType.application_command:
             return
 
-        args = []
+        args = {}
         if interaction.data.get("options"):
             for opt in interaction.data["options"]:
-                if opt["type"] in (6, 7, 8):  # User, Channel, Role
-                    args.append(f"{opt['name']}: <@{opt['value']}>")
-                else:
-                    args.append(f"{opt['name']}: {opt['value']}")
+                args[opt["name"]] = opt.get("value")
 
         full_command = f"/{interaction.command.name}"
-        if args:
-            full_command += " " + " ".join(args)
+        reason = args.get("raison", "")
+
+        # === LOG DES SANCTIONS SANS RAISON (dans 'bavures') ===
+        if interaction.command.name in ("kick", "ban", "warn") and (not reason or reason == "Aucune raison"):
+            embed = discord.Embed(
+                title="⚠️ Bavure détectée",
+                description=f"**Commande** : {full_command}\n**Auteur** : {interaction.user.mention}\n**Cible** : {args.get('pseudo', 'Inconnu')}\n**Raison** : *Aucune*",
+                color=0xff6600,
+                timestamp=discord.utils.utcnow()
+            )
+            await send_log_to(self.bot, "bavures", embed)
+
+        # === LOG NORMAL DANS 'commands' ===
+        desc = f"**Utilisateur** : {interaction.user.mention}\n**Commande complète** :\n```\n{full_command}"
+        for name, value in args.items():
+            desc += f" --{name} {value}"
+        desc += "\n```"
 
         embed = discord.Embed(
             title="🛠️ Commande slash détectée",
-            description=f"**Utilisateur** : {interaction.user.mention}\n**Commande complète** :\n```\n{full_command}\n```",
+            description=desc,
             color=0x2ecc71,
             timestamp=discord.utils.utcnow()
         )
