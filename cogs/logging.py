@@ -13,30 +13,6 @@ class LoggingCog(commands.Cog):
     async def on_message(self, message):
         if not message.guild or message.guild.id != config.GUILD_ID or message.author.id == self.bot.user.id:
             return
-
-        # === DÉTECTION DES BAVURES ===
-        contenu = message.content.strip()
-        if contenu:
-            # Nettoyer le contenu
-            contenu_nettoye = re.sub(r'[^\w\s]', '', contenu.lower())
-            mots = [m for m in contenu_nettoye.split() if len(m) >= 2]
-
-            # Moins de 2 mots → bavure
-            if len(mots) < 2:
-                await self._log_bavure(message, "Moins de 2 mots")
-                return
-
-            # Trop de caractères aléatoires
-            lettres_frequentes = "aeioulnrst"
-            total_car = sum(len(mot) for mot in mots)
-            if total_car > 0:
-                lettres_freq_count = sum(sum(1 for c in mot if c in lettres_frequentes) for mot in mots)
-                ratio = lettres_freq_count / total_car
-                if ratio < 0.25:
-                    await self._log_bavure(message, "Contenu aléatoire")
-                    return
-
-        # === LOG NORMAL ===
         embed = discord.Embed(
             title="📥 Message reçu",
             description=f"**Auteur** : {message.author.mention}\n**Salon** : {message.channel.mention}",
@@ -45,9 +21,6 @@ class LoggingCog(commands.Cog):
         )
         if message.content:
             embed.add_field(name="Contenu", value=message.content, inline=False)
-        if message.attachments:
-            urls = "\n".join(a.url for a in message.attachments)
-            embed.add_field(name="Pièces jointes", value=urls, inline=False)
         await send_log_to(self.bot, "messages", embed)
 
     async def _log_bavure(self, message, raison: str):
