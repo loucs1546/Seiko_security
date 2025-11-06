@@ -22,29 +22,22 @@ class LinkFilterCog(commands.Cog):
             return
 
         for url in urls:
-            # ✅ 1. Loguer D'ABORD dans "🔍・contenu"
+            # ✅ Loguer D'ABORD
             embed = discord.Embed(
                 title="🔗 Lien détecté",
-                description=f"Par {message.author.mention} dans {message.channel.mention}",
+                description=f"Par {message.author.name} ({message.author.mention}) dans {message.channel.name} ({message.channel.mention})",
                 color=0x0099ff,
                 timestamp=discord.utils.utcnow()
             )
             embed.add_field(name="URL", value=url[:1020])
-
             if est_url_suspecte(url):
                 embed.color = 0xff6600
                 embed.title = "⚠️ Lien suspect"
-
             await send_log_to(self.bot, "content", embed)
 
-        # ✅ 2. Supprimer le message APRÈS le log
+        # ✅ Supprimer APRÈS
         try:
             await message.delete()
-        except Exception:
-            pass
-
-        # ✅ 3. Avertir l'utilisateur
-        try:
             await message.channel.send(
                 f"{message.author.mention}, votre message contient un lien et a été supprimé.",
                 delete_after=5

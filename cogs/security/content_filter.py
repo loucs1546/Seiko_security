@@ -15,10 +15,10 @@ class ContentFilterCog(commands.Cog):
             return
 
         if est_contenu_suspect(message.content):
-            # ✅ 1. Loguer D'ABORD dans "🔍・contenu"
+            # ✅ Loguer D'ABORD
             embed = discord.Embed(
                 title="⚠️ Contenu signalé",
-                description=f"Par {message.author.mention} dans {message.channel.mention}",
+                description=f"Par {message.author.name} ({message.author.mention}) dans {message.channel.name} ({message.channel.mention})",
                 color=0xff6600,
                 timestamp=discord.utils.utcnow()
             )
@@ -26,14 +26,9 @@ class ContentFilterCog(commands.Cog):
             embed.add_field(name="Extrait", value=message.content[:100], inline=False)
             await send_log_to(self.bot, "content", embed)
 
-            # ✅ 2. Supprimer le message APRÈS le log
+            # ✅ Supprimer APRÈS
             try:
                 await message.delete()
-            except Exception:
-                pass
-
-            # ✅ 3. (Optionnel) Avertir l'utilisateur
-            try:
                 await message.channel.send(
                     f"{message.author.mention}, votre message a été supprimé pour contenu inapproprié.",
                     delete_after=5

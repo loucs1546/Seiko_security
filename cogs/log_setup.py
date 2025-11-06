@@ -44,7 +44,8 @@ class LogSetupCog(commands.Cog):
                 ("🔍・contenu", "content"),
                 ("🚨・alertes", "alerts"),
                 ("⚖️・sanctions", "sanctions"),
-                ("🎉・giveaway", "giveaway")
+                ("🎉・giveaway", "giveaway"),
+                ("💥・bavures", "bavures")  # ← Nouveau
             ]
 
             channel_ids = {}
