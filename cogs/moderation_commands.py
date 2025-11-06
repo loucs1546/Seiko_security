@@ -5,6 +5,7 @@ from datetime import datetime
 import core_config as config
 from utils.logging import send_log_to
 import re
+from discord.ui import View
 
 def get_sanction_channel(bot):
     return bot.get_channel(config.CONFIG["logs"].get("sanctions"))
