@@ -13,16 +13,26 @@ class ContentFilterCog(commands.Cog):
     async def on_message(self, message):
         if message.author.bot or not message.guild or message.guild.id != config.GUILD_ID:
             return
+
         if est_contenu_suspect(message.content):
+            try:
+                await message.delete()
+            except:
+                pass
+
             embed = discord.Embed(
-                title="⚠️ Contenu signalé",
-                description=f"Par {message.author.mention} dans {message.channel.mention}",
-                color=0xff6600,
+                title="⚠️ Contenu supprimé (illicite)",
+                description=f"**Auteur** : {message.author.mention}\n**Salon** : {message.channel.mention}",
+                color=0xff0000,
                 timestamp=discord.utils.utcnow()
             )
-            embed.add_field(name="Raison", value="Contenu suspect détecté", inline=False)
-            embed.add_field(name="Extrait", value=message.content[:100], inline=False)
-            await send_log_to(self.bot, "content", embed)  # ← send_log_to
+            embed.add_field(name="Contenu", value=message.content[:1020], inline=False)
+            await send_log_to(self.bot, "securite", embed)  # ← send_log_to, pas send_log
+
+            await message.channel.send(
+                f"{message.author.mention}, votre message a été supprimé pour contenu illicite.",
+                delete_after=5
+            )
 
 async def setup(bot):
     await bot.add_cog(ContentFilterCog(bot))

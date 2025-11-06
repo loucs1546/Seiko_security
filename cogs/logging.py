@@ -8,36 +8,6 @@ class LoggingCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    async def get_voice_action_author(self, guild, target_id, max_age_seconds=15):
-        """Récupère l'auteur d'une action vocale (déplacement, déconnexion) depuis les logs d'audit."""
-        try:
-            async for entry in guild.audit_logs(limit=10):
-                if entry.target.id != target_id:
-                    continue
-                if (discord.utils.utcnow() - entry.created_at).total_seconds() > max_age_seconds:
-                    continue
-                if entry.action in (
-                    discord.AuditLogAction.member_disconnect,
-                    discord.AuditLogAction.member_move
-                ):
-                    return entry.user
-                if entry.action == discord.AuditLogAction.member_update:
-                    if hasattr(entry.changes, 'channel_id'):
-                        return entry.user
-        except Exception:
-            pass
-        return None
-
-    async def get_audit_author(self, guild, target_id, action_type, max_age_seconds=15):
-        """Récupère l'auteur d'une action spécifique depuis les logs d'audit."""
-        try:
-            async for entry in guild.audit_logs(action=action_type, limit=10):
-                if entry.target.id == target_id and (discord.utils.utcnow() - entry.created_at).total_seconds() < max_age_seconds:
-                    return entry.user
-        except Exception:
-            pass
-        return None
-
     @commands.Cog.listener()
     async def on_message(self, message):
         if not message.guild or message.guild.id != config.GUILD_ID or message.author.id == self.bot.user.id:
@@ -49,7 +19,7 @@ class LoggingCog(commands.Cog):
             timestamp=message.created_at
         )
         if message.content:
-            embed.add_field(name="Contenu", value=message.content[:1020], inline=False)
+            embed.add_field(name="Contenu", value=message.content, inline=False)
         await send_log_to(self.bot, "messages", embed)
 
     @commands.Cog.listener()
@@ -58,12 +28,12 @@ class LoggingCog(commands.Cog):
             return
         embed = discord.Embed(
             title="✏️ Message édité",
-            description=f"Par {after.author.mention} dans {after.channel.mention}",
+            description=f"**Auteur** : {after.author.mention}\n**Salon** : {after.channel.mention}",
             color=0xffff00,
             timestamp=discord.utils.utcnow()
         )
-        embed.add_field(name="Avant", value=before.content[:1020] or "*(vide)*", inline=False)
-        embed.add_field(name="Après", value=after.content[:1020] or "*(vide)*", inline=False)
+        embed.add_field(name="Avant", value=before.content or "*(vide)*", inline=False)
+        embed.add_field(name="Après", value=after.content or "*(vide)*", inline=False)
         await send_log_to(self.bot, "messages", embed)
 
     @commands.Cog.listener()
@@ -71,22 +41,20 @@ class LoggingCog(commands.Cog):
         if not message.guild or message.guild.id != config.GUILD_ID:
             return
 
-        # Récupérer l'auteur de la suppression
+        # Récupérer qui a supprimé le message
         deleter = None
         try:
             async for entry in message.guild.audit_logs(limit=5, action=discord.AuditLogAction.message_delete):
                 if entry.target.id == message.author.id and (discord.utils.utcnow() - entry.created_at).total_seconds() < 10:
                     deleter = entry.user
                     break
-        except:
+        except Exception:
             pass
 
-        # Si le bot a supprimé le message, on le sait déjà (anti-spam, etc.)
-        # Sinon, par défaut, c'est l'auteur lui-même
+        # Si on ne sait pas, c'est probablement l'auteur lui-même
         if deleter is None:
             deleter = message.author
 
-        # Créer l'embed
         embed = discord.Embed(
             title="🗑️ Message supprimé",
             description=f"**Auteur** : {message.author.mention}\n"
@@ -101,19 +69,18 @@ class LoggingCog(commands.Cog):
             urls = "\n".join(a.url for a in message.attachments)
             embed.add_field(name="Pièces jointes", value=urls, inline=False)
 
-        # Envoyer dans le salon "messages"
         await send_log_to(self.bot, "messages", embed)
 
-        # Si c'est le bot qui a supprimé le message, loguer aussi dans "securite"
+        # Si c'est le bot qui a supprimé, loguer aussi en sécurité
         if deleter.id == self.bot.user.id:
             await send_log_to(self.bot, "securite", embed)
-#
+
     @commands.Cog.listener()
     async def on_member_update(self, before, after):
         if before.guild.id != config.GUILD_ID:
             return
 
-        # --- Rôles ---
+        # === RÔLES ===
         before_roles = set(before.roles)
         after_roles = set(after.roles)
         if before_roles != after_roles:
@@ -123,7 +90,7 @@ class LoggingCog(commands.Cog):
                     if entry.target.id == after.id and (discord.utils.utcnow() - entry.created_at).total_seconds() < 10:
                         moderator = entry.user
                         break
-            except:
+            except Exception:
                 pass
 
             added = after_roles - before_roles
@@ -141,17 +108,18 @@ class LoggingCog(commands.Cog):
                     color=0xffaa00,
                     timestamp=discord.utils.utcnow()
                 )
-                await send_log_to(self.bot, "roles", embed)
+                await send_log_to(self.bot, "moderation", embed)
 
-        # --- Pseudo ---
+        # === PSEUDO ===
         if before.nick != after.nick:
             moderator = None
             try:
                 async for entry in after.guild.audit_logs(limit=5, action=discord.AuditLogAction.member_update):
-                    if entry.target.id == after.id and hasattr(entry.changes, 'nick') and (discord.utils.utcnow() - entry.created_at).total_seconds() < 10:
+                    if entry.target.id == after.id and (discord.utils.utcnow() - entry.created_at).total_seconds() < 10:
+                        # On suppose que si c'est un member_update récent, c'est bien le modérateur
                         moderator = entry.user
                         break
-            except:
+            except Exception:
                 pass
 
             old_nick = before.nick or before.global_name or before.name
@@ -163,6 +131,17 @@ class LoggingCog(commands.Cog):
                 color=0x00ccff,
                 timestamp=discord.utils.utcnow()
             )
+            await send_log_to(self.bot, "profile", embed)
+
+        # === AVATAR ===
+        if before.avatar != after.avatar:
+            embed = discord.Embed(
+                title="🖼️ Avatar modifié",
+                description=f"{after.mention}",
+                color=0x00ccff,
+                timestamp=discord.utils.utcnow()
+            )
+            embed.set_thumbnail(url=after.display_avatar.url)
             await send_log_to(self.bot, "profile", embed)
 
     @commands.Cog.listener()
@@ -184,7 +163,15 @@ class LoggingCog(commands.Cog):
 
         # Déconnexion
         elif before.channel is not None and after.channel is None:
-            moderator = await self.get_voice_action_author(member.guild, member.id)
+            moderator = None
+            try:
+                async for entry in member.guild.audit_logs(limit=5, action=discord.AuditLogAction.member_disconnect):
+                    if entry.target.id == member.id and (discord.utils.utcnow() - entry.created_at).total_seconds() < 10:
+                        moderator = entry.user
+                        break
+            except Exception:
+                pass
+
             fait_par = moderator.mention if moderator else member.mention
             embed = discord.Embed(
                 title="🎤 Déconnexion vocale",
@@ -196,7 +183,15 @@ class LoggingCog(commands.Cog):
 
         # Déplacement
         elif before.channel and after.channel and before.channel != after.channel:
-            moderator = await self.get_voice_action_author(member.guild, member.id)
+            moderator = None
+            try:
+                async for entry in member.guild.audit_logs(limit=5, action=discord.AuditLogAction.member_move):
+                    if entry.target.id == member.id and (discord.utils.utcnow() - entry.created_at).total_seconds() < 10:
+                        moderator = entry.user
+                        break
+            except Exception:
+                pass
+
             fait_par = moderator.mention if moderator else member.mention
             embed = discord.Embed(
                 title="🎤 Déplacement vocal",
@@ -208,17 +203,21 @@ class LoggingCog(commands.Cog):
 
         # Mute / Deafen
         elif before.mute != after.mute or before.deaf != after.deaf:
-            moderator = await self.get_audit_author(
-                member.guild,
-                member.id,
-                discord.AuditLogAction.member_update,
-                max_age_seconds=15
-            )
+            moderator = None
+            try:
+                async for entry in member.guild.audit_logs(limit=5, action=discord.AuditLogAction.member_update):
+                    if entry.target.id == member.id and (discord.utils.utcnow() - entry.created_at).total_seconds() < 10:
+                        moderator = entry.user
+                        break
+            except Exception:
+                pass
+
             actions = []
             if before.mute != after.mute:
                 actions.append("mute vocal" if after.mute else "unmute vocal")
             if before.deaf != after.deaf:
                 actions.append("sourdine" if after.deaf else "fin de sourdine")
+
             fait_par = moderator.mention if moderator else "Inconnu"
             embed = discord.Embed(
                 title="🎤 État vocal modifié",
@@ -236,7 +235,7 @@ class LoggingCog(commands.Cog):
         args = []
         if interaction.data.get("options"):
             for opt in interaction.data["options"]:
-                if opt["type"] in (6, 7, 8):
+                if opt["type"] in (6, 7, 8):  # User, Channel, Role
                     args.append(f"{opt['name']}: <@{opt['value']}>")
                 else:
                     args.append(f"{opt['name']}: {opt['value']}")
