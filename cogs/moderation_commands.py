@@ -232,6 +232,49 @@ class ModerationCommandsCog(commands.Cog):
                 f"❌ Aucun utilisateur, salon ou rôle trouvé avec l'ID `{id}`.",
                 ephemeral=True
             )
+    # Ajoute ces commandes dans la classe ModerationCommandsCog
+
+    @discord.app_commands.command(name="logs-messages", description="Affiche les messages d'un utilisateur")
+    @discord.app_commands.describe(user="Utilisateur à filtrer", salon="Salon où envoyer les logs")
+    @discord.app_commands.checks.has_permissions(administrator=True)
+    async def logs_messages(self, interaction: discord.Interaction, user: discord.Member, salon: discord.TextChannel):
+        # Cette commande nécessite un stockage des messages (à implémenter)
+        await interaction.response.send_message("ℹ️ Commande en développement.", ephemeral=True)
+
+    @discord.app_commands.command(name="logs-moderation", description="Affiche les actions de modération d'un utilisateur")
+    @discord.app_commands.describe(user="Utilisateur à filtrer")
+    @discord.app_commands.checks.has_permissions(administrator=True)
+    async def logs_moderation(self, interaction: discord.Interaction, user: discord.Member):
+        # Cette commande nécessite un stockage des logs d'audit (à implémenter)
+        await interaction.response.send_message("ℹ️ Commande en développement.", ephemeral=True)
+
+    @discord.app_commands.command(name="logs-ticket", description="Affiche les logs de ticket d'un utilisateur")
+    @discord.app_commands.describe(user="Utilisateur à filtrer")
+    @discord.app_commands.checks.has_permissions(administrator=True)
+    async def logs_ticket(self, interaction: discord.Interaction, user: discord.Member):
+        # À lier avec l'autre bot (via écoute des messages)
+        await interaction.response.send_message("ℹ️ Commande en développement.", ephemeral=True)
+
+    @discord.app_commands.command(name="logs-vocal", description="Affiche les activités vocales d'un utilisateur")
+    @discord.app_commands.describe(user="Utilisateur à filtrer")
+    @discord.app_commands.checks.has_permissions(administrator=True)
+    async def logs_vocal(self, interaction: discord.Interaction, user: discord.Member):
+        # À implémenter via on_voice_state_update
+        await interaction.response.send_message("ℹ️ Commande en développement.", ephemeral=True)
+
+    @discord.app_commands.command(name="logs-giveaway", description="Affiche les giveaways créés par un utilisateur")
+    @discord.app_commands.describe(user="Utilisateur à filtrer")
+    @discord.app_commands.checks.has_permissions(administrator=True)
+    async def logs_giveaway(self, interaction: discord.Interaction, user: discord.Member):
+        # À lier avec l'autre bot (via écoute des messages)
+        await interaction.response.send_message("ℹ️ Commande en développement.", ephemeral=True)
+
+    @discord.app_commands.command(name="logs-securite", description="Affiche les alertes de sécurité d'un utilisateur")
+    @discord.app_commands.describe(user="Utilisateur à filtrer")
+    @discord.app_commands.checks.has_permissions(administrator=True)
+    async def logs_securite(self, interaction: discord.Interaction, user: discord.Member):
+        # À implémenter via les logs de sécurité
+        await interaction.response.send_message("ℹ️ Commande en développement.", ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(ModerationCommandsCog(bot))
