@@ -4,7 +4,7 @@ from typing import Optional, Union
 import discord
 import core_config as config
 
-async def _send_to_channel(bot: discord.Client, channel_id: int, content: Union[str, discord.Embed], *, mention: Optional[str]=None) -> bool:
+async def _send_to_channel(bot: discord.Client, channel_id: int, content: Union[str, discord.Embed], *, mention: Optional[str] = None) -> bool:
     try:
         channel = bot.get_channel(channel_id)
         if channel is None:
@@ -18,11 +18,12 @@ async def _send_to_channel(bot: discord.Client, channel_id: int, content: Union[
     except Exception:
         return False
 
-async def send_log_to(bot: discord.Client, log_type: str, content: Union[str, discord.Embed], *, mention: Optional[str]=None) -> bool:
+async def send_log_to(bot: discord.Client, log_type: str, content: Union[str, discord.Embed], *, mention: Optional[str] = None) -> bool:
     channel_id = config.CONFIG.get("logs", {}).get(log_type)
     if not channel_id:
         return False
     return await _send_to_channel(bot, channel_id, content, mention=mention)
 
-def send_log(bot: discord.Client, log_type: str, content: Union[str, discord.Embed], *, mention: Optional[str]=None):
+# Pour compatibilité avec les anciens cogs
+def send_log(bot: discord.Client, log_type: str, content: Union[str, discord.Embed], *, mention: Optional[str] = None):
     return asyncio.create_task(send_log_to(bot, log_type, content, mention=mention))
