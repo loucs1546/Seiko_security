@@ -4,7 +4,7 @@ from discord.ext import commands
 import core_config as config
 from config.filters import est_contenu_suspect
 from utils.logging import send_log_to
-from utils.views import ContentReviewView
+from utils.views import ContentReviewView  # ← Ajouté
 
 class ContentFilterCog(commands.Cog):
     def __init__(self, bot):
@@ -30,7 +30,8 @@ class ContentFilterCog(commands.Cog):
             if message.content:
                 embed.add_field(name="Contenu", value=message.content[:1020], inline=False)
 
-            view = ContentReviewView(message.content, message.author, message.channel, self.bot)
+            # Ajouter les boutons
+            view = ContentReviewView(message.content, message.author, message.channel)
             await send_log_to(self.bot, "content", embed)
             await send_log_to(self.bot, "content", view=view)
 

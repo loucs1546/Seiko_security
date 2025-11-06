@@ -20,7 +20,8 @@ CONFIG: Dict[str, Any] = {
         "ticket": None,
         "giveaway": None,
         "securite": None,
-        "bavures": None  # ← Nouveau
+        "bavures": None,
+        "bavures-sanctions": None
     }
 }
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
