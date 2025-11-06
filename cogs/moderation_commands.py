@@ -10,26 +10,26 @@ def get_sanction_channel(bot):
     return bot.get_channel(config.CONFIG["logs"].get("sanctions"))
 
 def est_bavure_raison(raison: str) -> bool:
-    """Détecte une raison de sanction invalide (bavure)."""
-    if not raison or raison.strip() == "" or raison.strip().lower() == "aucune raison":
+    """Détecte une raison invalide : besoin de 2 vrais mots (avec voyelle)."""
+    if not raison or raison.strip().lower() in ("", "aucune raison"):
         return True
-    raison = raison.strip()
-    contenu_nettoye = re.sub(r'[^\w\s]', '', raison.lower())
-    mots = [m for m in contenu_nettoye.split() if len(m) >= 2]
+    mots = re.findall(r'\b[a-zA-Z]{2,}\b', raison)
     if len(mots) < 2:
         return True
-    lettres_frequentes = "aeioulnrst"
-    total_car = sum(len(m) for m in mots)
-    if total_car == 0:
-        return True
-    lettres_freq_count = sum(sum(1 for c in m if c in lettres_frequentes) for m in mots)
-    ratio = lettres_freq_count / total_car
-    return ratio < 0.25
+    voyelles = "aeiouy"
+    valid_count = 0
+    for mot in mots:
+        if any(c.lower() in voyelles for c in mot):
+            valid_count += 1
+            if valid_count >= 2:
+                return False
+    return True
 
 class ModerationCommandsCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    # === COMMANDES DE SÉCURITÉ ===
     @discord.app_commands.command(name="anti-spam", description="Active/désactive l'anti-spam")
     @discord.app_commands.checks.has_permissions(administrator=True)
     async def anti_spam(self, interaction: discord.Interaction, actif: bool):
@@ -48,6 +48,7 @@ class ModerationCommandsCog(commands.Cog):
         config.CONFIG["security"]["anti_hack"] = actif
         await interaction.response.send_message(f"✅ Anti-hack {'activé' if actif else 'désactivé'}.", ephemeral=True)
 
+    # === MODÉRATION ===
     @discord.app_commands.command(name="ping", description="Affiche la latence du bot")
     async def ping(self, interaction: discord.Interaction):
         latency = round(self.bot.latency * 1000)
@@ -71,10 +72,7 @@ class ModerationCommandsCog(commands.Cog):
     @discord.app_commands.describe(categorie="Catégorie à supprimer")
     @discord.app_commands.checks.has_permissions(manage_channels=True)
     async def delete_categorie(self, interaction: discord.Interaction, categorie: discord.CategoryChannel):
-        await interaction.response.send_message(
-            f"✅ Suppression en cours...",
-            ephemeral=True
-        )
+        await interaction.response.send_message("✅ Suppression en cours...", ephemeral=True)
         for channel in categorie.channels:
             try:
                 await channel.delete(reason=f"Supprimé avec la catégorie par {interaction.user}")
@@ -89,7 +87,8 @@ class ModerationCommandsCog(commands.Cog):
     @discord.app_commands.describe(salon="Salon cible", contenu="Message à envoyer")
     @discord.app_commands.checks.has_permissions(manage_messages=True)
     async def say(self, interaction: discord.Interaction, salon: discord.TextChannel, contenu: str):
-        await salon.send(contenu)
+        contenu_nettoye = contenu.replace("\\n", "\n")
+        await salon.send(contenu_nettoye)
         await interaction.response.send_message(f"✅ Message envoyé dans {salon.mention}.", ephemeral=True)
 
     @discord.app_commands.command(name="kick", description="Expulse un membre")
@@ -205,17 +204,14 @@ class ModerationCommandsCog(commands.Cog):
         guild = interaction.guild
         results = []
 
-        # Membre
         member = guild.get_member(obj_id)
         if member:
             results.append(f"👤 **Membre** : {member.mention} (`{member}`)")
 
-        # Salon
         channel = guild.get_channel(obj_id)
         if channel:
             results.append(f"💬 **Salon** : {channel.mention} (`{channel.name}`)")
 
-        # Rôle
         role = guild.get_role(obj_id)
         if role:
             results.append(f"👑 **Rôle** : {role.mention} (`{role.name}`)")

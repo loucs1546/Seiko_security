@@ -4,6 +4,7 @@ from discord.ext import commands
 import core_config as config
 from config.filters import est_contenu_suspect
 from utils.logging import send_log_to
+from utils.views import ContentReviewView
 
 class ContentFilterCog(commands.Cog):
     def __init__(self, bot):
@@ -15,26 +16,23 @@ class ContentFilterCog(commands.Cog):
             return
 
         if est_contenu_suspect(message.content):
-            # ✅ Loguer D'ABORD
+            try:
+                await message.delete()
+            except:
+                pass
+
             embed = discord.Embed(
-                title="⚠️ Contenu signalé",
-                description=f"Par {message.author.name} ({message.author.mention}) dans {message.channel.name} ({message.channel.mention})",
+                title="⚠️ Contenu suspect",
+                description=f"**Auteur** : {message.author.mention}\n**Salon** : {message.channel.mention}",
                 color=0xff6600,
                 timestamp=discord.utils.utcnow()
             )
-            embed.add_field(name="Raison", value="Contenu suspect détecté", inline=False)
-            embed.add_field(name="Extrait", value=message.content[:100], inline=False)
-            await send_log_to(self.bot, "content", embed)
+            if message.content:
+                embed.add_field(name="Contenu", value=message.content[:1020], inline=False)
 
-            # ✅ Supprimer APRÈS
-            try:
-                await message.delete()
-                await message.channel.send(
-                    f"{message.author.mention}, votre message a été supprimé pour contenu inapproprié.",
-                    delete_after=5
-                )
-            except Exception:
-                pass
+            view = ContentReviewView(message.content, message.author, message.channel, self.bot)
+            await send_log_to(self.bot, "content", embed)
+            await send_log_to(self.bot, "content", view=view)
 
 async def setup(bot):
     await bot.add_cog(ContentFilterCog(bot))

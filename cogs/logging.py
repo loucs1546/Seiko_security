@@ -24,7 +24,6 @@ class LoggingCog(commands.Cog):
         await send_log_to(self.bot, "messages", embed)
 
     async def _log_bavure(self, message, raison: str):
-        """Log une bavure dans le salon dédié."""
         try:
             await message.delete()
         except:
@@ -32,21 +31,20 @@ class LoggingCog(commands.Cog):
 
         embed = discord.Embed(
             title="⚠️ Bavure détectée",
-            description=f"**Auteur** : {message.author.mention}\n"
-                        f"**Salon** : {message.channel.mention}\n"
-                        f"**Raison** : {raison}",
+            description=f"**Auteur** : {message.author.mention}\n**Salon** : {message.channel.mention}\n**Raison** : {raison}",
             color=0xff6600,
             timestamp=message.created_at
         )
         if message.content:
             embed.add_field(name="Contenu", value=message.content[:1020], inline=False)
+
+        from utils.views import ContentReviewView
+        view = ContentReviewView(message.content, message.author, message.channel, self.bot)
         await send_log_to(self.bot, "bavures", embed)
+        await send_log_to(self.bot, "bavures", view=view)
 
         try:
-            await message.channel.send(
-                f"{message.author.mention}, veuillez écrire des messages compréhensibles.",
-                delete_after=5
-            )
+            await message.channel.send(f"{message.author.mention}, veuillez utiliser des messages compréhensibles.", delete_after=5)
         except:
             pass
 
