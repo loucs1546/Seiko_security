@@ -202,6 +202,45 @@ class ModerationCommandsCog(commands.Cog):
             await interaction.response.send_message("📭 Aucun log trouvé.", ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(f"❌ Erreur : {e}", ephemeral=True)
+    
+    @discord.app_commands.command(name="reach-id", description="Résout un ID Discord (utilisateur, salon, rôle)")
+    @discord.app_commands.describe(id="ID à résoudre")
+    @discord.app_commands.checks.has_permissions(administrator=True)
+    async def reach_id(self, interaction: discord.Interaction, id: str):
+        try:
+            obj_id = int(id)
+        except ValueError:
+            await interaction.response.send_message("❌ ID invalide. Doit être un nombre.", ephemeral=True)
+            return
+
+        guild = interaction.guild
+        results = []
+
+        # 1. Chercher un membre
+        member = guild.get_member(obj_id)
+        if member:
+            results.append(f"👤 **Membre** : {member.mention} (`{member}`)")
+
+        # 2. Chercher un salon
+        channel = guild.get_channel(obj_id)
+        if channel:
+            results.append(f"💬 **Salon** : {channel.mention} (`{channel.name}`)")
+
+        # 3. Chercher un rôle
+        role = guild.get_role(obj_id)
+        if role:
+            results.append(f"👑 **Rôle** : {role.mention} (`{role.name}`)")
+
+        if results:
+            await interaction.response.send_message(
+                f"🔍 Résultats pour l'ID `{id}` :\n" + "\n".join(results),
+                ephemeral=True
+            )
+        else:
+            await interaction.response.send_message(
+                f"❌ Aucun utilisateur, salon ou rôle trouvé avec l'ID `{id}`.",
+                ephemeral=True
+            )
 
 async def setup(bot):
     await bot.add_cog(ModerationCommandsCog(bot))
