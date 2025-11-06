@@ -3,7 +3,7 @@ import discord
 from discord.ext import commands
 import core_config as config
 from config.filters import est_contenu_suspect
-from utils.logging import send_log_to  # ← send_log_to
+from utils.logging import send_log_to
 
 class ContentFilterCog(commands.Cog):
     def __init__(self, bot):
@@ -15,24 +15,31 @@ class ContentFilterCog(commands.Cog):
             return
 
         if est_contenu_suspect(message.content):
-            try:
-                await message.delete()
-            except:
-                pass
-
+            # ✅ 1. Loguer D'ABORD dans "🔍・contenu"
             embed = discord.Embed(
-                title="⚠️ Contenu supprimé (illicite)",
-                description=f"**Auteur** : {message.author.mention}\n**Salon** : {message.channel.mention}",
-                color=0xff0000,
+                title="⚠️ Contenu signalé",
+                description=f"Par {message.author.mention} dans {message.channel.mention}",
+                color=0xff6600,
                 timestamp=discord.utils.utcnow()
             )
-            embed.add_field(name="Contenu", value=message.content[:1020], inline=False)
-            await send_log_to(self.bot, "securite", embed)  # ← send_log_to, pas send_log
+            embed.add_field(name="Raison", value="Contenu suspect détecté", inline=False)
+            embed.add_field(name="Extrait", value=message.content[:100], inline=False)
+            await send_log_to(self.bot, "content", embed)
 
-            await message.channel.send(
-                f"{message.author.mention}, votre message a été supprimé pour contenu illicite.",
-                delete_after=5
-            )
+            # ✅ 2. Supprimer le message APRÈS le log
+            try:
+                await message.delete()
+            except Exception:
+                pass
+
+            # ✅ 3. (Optionnel) Avertir l'utilisateur
+            try:
+                await message.channel.send(
+                    f"{message.author.mention}, votre message a été supprimé pour contenu inapproprié.",
+                    delete_after=5
+                )
+            except Exception:
+                pass
 
 async def setup(bot):
     await bot.add_cog(ContentFilterCog(bot))
