@@ -5,6 +5,7 @@ import core_config as config
 import re
 from utils.logging import send_log_to
 from config.filters import est_url_suspecte
+from utils.views import ContentReviewView
 
 URL_REGEX = re.compile(r"https?://[^\s]+")
 
@@ -21,29 +22,23 @@ class LinkFilterCog(commands.Cog):
         if not urls:
             return
 
-        for url in urls:
-            # ✅ Loguer D'ABORD
-            embed = discord.Embed(
-                title="🔗 Lien détecté",
-                description=f"Par {message.author.name} ({message.author.mention}) dans {message.channel.name} ({message.channel.mention})",
-                color=0x0099ff,
-                timestamp=discord.utils.utcnow()
-            )
-            embed.add_field(name="URL", value=url[:1020])
-            if est_url_suspecte(url):
-                embed.color = 0xff6600
-                embed.title = "⚠️ Lien suspect"
-            await send_log_to(self.bot, "content", embed)
-
-        # ✅ Supprimer APRÈS
         try:
             await message.delete()
-            await message.channel.send(
-                f"{message.author.mention}, votre message contient un lien et a été supprimé.",
-                delete_after=5
-            )
-        except Exception:
+        except:
             pass
+
+        embed = discord.Embed(
+            title="🗑️ Message supprimé (lien suspect)",
+            description=f"**Auteur** : {message.author.mention}\n**Salon** : {message.channel.mention}\n**Supprimé par** : {self.bot.user.mention} (bot)",
+            color=0xff6600,
+            timestamp=discord.utils.utcnow()
+        )
+        if message.content:
+            embed.add_field(name="Contenu", value=message.content[:1020], inline=False)
+
+        view = ContentReviewView(message.content, message.author, message.channel, self.bot)
+        await send_log_to(self.bot, "content", embed)
+        await send_log_to(self.bot, "content", view=view)
 
 async def setup(bot):
     await bot.add_cog(LinkFilterCog(bot))

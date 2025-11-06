@@ -5,13 +5,11 @@ from datetime import datetime
 import core_config as config
 from utils.logging import send_log_to
 import re
-from discord.ui import View
 
 def get_sanction_channel(bot):
     return bot.get_channel(config.CONFIG["logs"].get("sanctions"))
 
 def est_bavure_raison(raison: str) -> bool:
-    """Détecte une raison invalide : besoin de 2 vrais mots (avec voyelle)."""
     if not raison or raison.strip().lower() in ("", "aucune raison"):
         return True
     mots = re.findall(r'\b[a-zA-Z]{2,}\b', raison)
@@ -26,74 +24,10 @@ def est_bavure_raison(raison: str) -> bool:
                 return False
     return True
 
-class BavureReviewView(View):
-    def __init__(self, mod_author: discord.Member, target: discord.Member, command_name: str, reason: str, interaction: discord.Interaction):
-        super().__init__(timeout=600)
-        self.mod_author = mod_author
-        self.target = target
-        self.command_name = command_name
-        self.reason = reason
-        self.original_interaction = interaction
-
-    @discord.ui.button(label="✅ Accepter", style=discord.ButtonStyle.green)
-    async def accept(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Exécuter la commande
-        if self.command_name == "warn":
-            embed = discord.Embed(
-                title="⚠️ Avertissement",
-                description=f"**Membre** : {self.target.mention}\n**Modérateur** : {self.mod_author.mention}\n**Raison** : {self.reason}",
-                color=0xffff00,
-                timestamp=discord.utils.utcnow()
-            )
-            ch = get_sanction_channel(self.original_interaction.client)
-            if ch: await ch.send(embed=embed)
-            await self.original_interaction.followup.send(f"✅ Avertissement envoyé à {self.target.mention}.", ephemeral=True)
-
-        elif self.command_name in ("kick", "ban"):
-            await self.target.send(f"⚠️ Vous avez été {'expulsé' if self.command_name == 'kick' else 'banni'} pour : **{self.reason}**.")
-            if self.command_name == "kick":
-                await self.target.kick(reason=self.reason)
-                action = "expulsé"
-            else:
-                await self.target.ban(reason=self.reason)
-                action = "banni"
-            embed = discord.Embed(
-                title=f"{'👢 Kick' if self.command_name == 'kick' else '🔨 Ban'}",
-                description=f"**Membre** : {self.target.mention}\n**Modérateur** : {self.mod_author.mention}\n**Raison** : {self.reason}",
-                color=0xff0000 if self.command_name == "ban" else 0xff9900,
-                timestamp=discord.utils.utcnow()
-            )
-            ch = get_sanction_channel(self.original_interaction.client)
-            if ch: await ch.send(embed=embed)
-            await self.original_interaction.followup.send(f"✅ {self.target.mention} {action}.", ephemeral=True)
-
-        # Log dans bavures-sanctions
-        log_embed = discord.Embed(
-            title="✅ Bavure acceptée",
-            description=f"**Modérateur** : {self.mod_author.mention}\n**Cible** : {self.target.mention}\n**Commande** : /{self.command_name}\n**Raison** : {self.reason}",
-            color=0x2ecc71,
-            timestamp=discord.utils.utcnow()
-        )
-        await send_log_to(self.original_interaction.client, "bavures-sanctions", log_embed)
-        await interaction.response.edit_message(content="✅ Sanction appliquée.", view=None)
-
-    @discord.ui.button(label="❌ Refuser", style=discord.ButtonStyle.red)
-    async def reject(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Log dans bavures-sanctions
-        log_embed = discord.Embed(
-            title="❌ Bavure refusée",
-            description=f"**Modérateur** : {self.mod_author.mention}\n**Cible** : {self.target.mention}\n**Commande** : /{self.command_name}\n**Raison** : {self.reason}",
-            color=0xff6600,
-            timestamp=discord.utils.utcnow()
-        )
-        await send_log_to(self.original_interaction.client, "bavures-sanctions", log_embed)
-        await interaction.response.edit_message(content="❌ Sanction annulée.", view=None)
-
 class ModerationCommandsCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    # === COMMANDES DE SÉCURITÉ ===
     @discord.app_commands.command(name="anti-spam", description="Active/désactive l'anti-spam")
     @discord.app_commands.checks.has_permissions(administrator=True)
     async def anti_spam(self, interaction: discord.Interaction, actif: bool):
@@ -112,7 +46,6 @@ class ModerationCommandsCog(commands.Cog):
         config.CONFIG["security"]["anti_hack"] = actif
         await interaction.response.send_message(f"✅ Anti-hack {'activé' if actif else 'désactivé'}.", ephemeral=True)
 
-    # === MODÉRATION ===
     @discord.app_commands.command(name="ping", description="Affiche la latence du bot")
     async def ping(self, interaction: discord.Interaction):
         latency = round(self.bot.latency * 1000)
@@ -155,58 +88,24 @@ class ModerationCommandsCog(commands.Cog):
         await salon.send(contenu_nettoye)
         await interaction.response.send_message(f"✅ Message envoyé dans {salon.mention}.", ephemeral=True)
 
-    @discord.app_commands.command(name="warn", description="Avertit un membre")
-    @discord.app_commands.describe(pseudo="Membre à avertir", raison="Raison de l'avertissement")
-    @discord.app_commands.checks.has_permissions(manage_messages=True)
-    async def warn(self, interaction: discord.Interaction, pseudo: discord.Member, raison: str = "Aucune raison"):
-        if self._est_bavure_raison(raison):
-            embed = discord.Embed(
-                title="⚠️ Bavure détectée",
-                description=f"**Modérateur** : {interaction.user.mention}\n**Cible** : {pseudo.mention}\n**Commande** : `/warn`\n**Raison** : *{raison}*",
-                color=0xff6600,
-                timestamp=discord.utils.utcnow()
-            )
-            await send_log_to(self.bot, "bavures", embed)
-            view = BavureReviewView(interaction.user, pseudo, "warn", raison, interaction)
-            await interaction.response.send_message(
-                "⚠️ Cette sanction semble être une bavure. Voulez-vous la valider ?",
-                view=view,
-                ephemeral=True
-            )
-            return
-
-        # Exécution normale
-        embed = discord.Embed(
-            title="⚠️ Avertissement",
-            description=f"**Membre** : {pseudo.mention}\n**Modérateur** : {interaction.user.mention}\n**Raison** : {raison}",
-            color=0xffff00,
-            timestamp=discord.utils.utcnow()
-        )
-        ch = get_sanction_channel(self.bot)
-        if ch: await ch.send(embed=embed)
-        await interaction.response.send_message(f"✅ Avertissement envoyé.", ephemeral=True)
-
     @discord.app_commands.command(name="kick", description="Expulse un membre")
     @discord.app_commands.describe(pseudo="Membre à expulser", raison="Raison du kick")
     @discord.app_commands.checks.has_permissions(kick_members=True)
     async def kick(self, interaction: discord.Interaction, pseudo: discord.Member, raison: str = "Aucune raison"):
-        if self._est_bavure_raison(raison):
+        if est_bavure_raison(raison):
             embed = discord.Embed(
                 title="⚠️ Bavure détectée",
-                description=f"**Modérateur** : {interaction.user.mention}\n**Cible** : {pseudo.mention}\n**Commande** : `/kick`\n**Raison** : *{raison}*",
+                description=f"**Modérateur** : {interaction.user.mention}\n**Cible** : {pseudo.mention}\n**Commande** : /kick\n**Raison** : *{raison}*",
                 color=0xff6600,
                 timestamp=discord.utils.utcnow()
             )
+            from utils.views import ContentReviewView
+            view = ContentReviewView(raison, pseudo, interaction.channel, self.bot)
             await send_log_to(self.bot, "bavures", embed)
-            view = BavureReviewView(interaction.user, pseudo, "kick", raison, interaction)
-            await interaction.response.send_message(
-                "⚠️ Cette sanction semble être une bavure. Voulez-vous la valider ?",
-                view=view,
-                ephemeral=True
-            )
+            await send_log_to(self.bot, "bavures", view=view)
+            await interaction.response.send_message("❌ La raison est invalide (moins de 2 mots ou texte aléatoire).", ephemeral=True)
             return
 
-        # Exécution normale
         try:
             await pseudo.send(f"⚠️ Vous avez été expulsé de **{interaction.guild.name}** pour : **{raison}**.")
         except:
@@ -216,7 +115,7 @@ class ModerationCommandsCog(commands.Cog):
             title="👢 Kick",
             description=f"**Membre** : {pseudo.mention}\n**Modérateur** : {interaction.user.mention}\n**Raison** : {raison}",
             color=0xff9900,
-            timestamp=discord.utils.utcnow()
+            timestamp=datetime.utcnow()
         )
         ch = get_sanction_channel(self.bot)
         if ch: await ch.send(embed=embed)
@@ -226,23 +125,20 @@ class ModerationCommandsCog(commands.Cog):
     @discord.app_commands.describe(pseudo="Membre à bannir", temps="Jours de suppression des messages (0 = aucun)", raison="Raison du ban")
     @discord.app_commands.checks.has_permissions(ban_members=True)
     async def ban(self, interaction: discord.Interaction, pseudo: discord.Member, temps: int = 0, raison: str = "Aucune raison"):
-        if self._est_bavure_raison(raison):
+        if est_bavure_raison(raison):
             embed = discord.Embed(
                 title="⚠️ Bavure détectée",
-                description=f"**Modérateur** : {interaction.user.mention}\n**Cible** : {pseudo.mention}\n**Commande** : `/ban`\n**Raison** : *{raison}*",
+                description=f"**Modérateur** : {interaction.user.mention}\n**Cible** : {pseudo.mention}\n**Commande** : /ban\n**Raison** : *{raison}*",
                 color=0xff6600,
                 timestamp=discord.utils.utcnow()
             )
+            from utils.views import ContentReviewView
+            view = ContentReviewView(raison, pseudo, interaction.channel, self.bot)
             await send_log_to(self.bot, "bavures", embed)
-            view = BavureReviewView(interaction.user, pseudo, "ban", raison, interaction)
-            await interaction.response.send_message(
-                "⚠️ Cette sanction semble être une bavure. Voulez-vous la valider ?",
-                view=view,
-                ephemeral=True
-            )
+            await send_log_to(self.bot, "bavures", view=view)
+            await interaction.response.send_message("❌ La raison est invalide (moins de 2 mots ou texte aléatoire).", ephemeral=True)
             return
 
-        # Exécution normale
         try:
             await pseudo.send(f"⚠️ Vous avez été banni de **{interaction.guild.name}** pour : **{raison}**.")
         except:
@@ -252,11 +148,39 @@ class ModerationCommandsCog(commands.Cog):
             title="🔨 Ban",
             description=f"**Membre** : {pseudo.mention}\n**Modérateur** : {interaction.user.mention}\n**Raison** : {raison}",
             color=0xff0000,
-            timestamp=discord.utils.utcnow()
+            timestamp=datetime.utcnow()
         )
         ch = get_sanction_channel(self.bot)
         if ch: await ch.send(embed=embed)
         await interaction.response.send_message(f"✅ {pseudo.mention} banni.", ephemeral=True)
+
+    @discord.app_commands.command(name="warn", description="Avertit un membre")
+    @discord.app_commands.describe(pseudo="Membre à avertir", raison="Raison de l'avertissement")
+    @discord.app_commands.checks.has_permissions(manage_messages=True)
+    async def warn(self, interaction: discord.Interaction, pseudo: discord.Member, raison: str = "Aucune raison"):
+        if est_bavure_raison(raison):
+            embed = discord.Embed(
+                title="⚠️ Bavure détectée",
+                description=f"**Modérateur** : {interaction.user.mention}\n**Cible** : {pseudo.mention}\n**Commande** : /warn\n**Raison** : *{raison}*",
+                color=0xff6600,
+                timestamp=discord.utils.utcnow()
+            )
+            from utils.views import ContentReviewView
+            view = ContentReviewView(raison, pseudo, interaction.channel, self.bot)
+            await send_log_to(self.bot, "bavures", embed)
+            await send_log_to(self.bot, "bavures", view=view)
+            await interaction.response.send_message("❌ La raison est invalide (moins de 2 mots ou texte aléatoire).", ephemeral=True)
+            return
+
+        embed = discord.Embed(
+            title="⚠️ Avertissement",
+            description=f"**Membre** : {pseudo.mention}\n**Modérateur** : {interaction.user.mention}\n**Raison** : {raison}",
+            color=0xffff00,
+            timestamp=discord.utils.utcnow()
+        )
+        ch = get_sanction_channel(self.bot)
+        if ch: await ch.send(embed=embed)
+        await interaction.response.send_message(f"✅ Avertissement envoyé.", ephemeral=True)
 
     @discord.app_commands.command(name="reachlog", description="Affiche le dernier log d'audit")
     @discord.app_commands.checks.has_permissions(administrator=True)
