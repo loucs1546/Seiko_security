@@ -91,4 +91,112 @@ async def scan_deleted(interaction: discord.Interaction):
         count += 1
     await interaction.followup.send(f"✅ {count} suppressions récupérées.", ephemeral=True)
 
+@bot.tree.command(name="logs-messages", description="Configure le salon pour les logs de messages")
+@discord.app_commands.describe(salon="Salon de destination pour les logs")
+@discord.app_commands.checks.has_permissions(administrator=True)
+async def logs_messages(interaction: discord.Interaction, salon: discord.TextChannel):
+    if not isinstance(config.CONFIG, dict):
+        config.CONFIG = {}
+    config.CONFIG.setdefault("logs", {})
+    config.CONFIG["logs"]["messages"] = salon.id
+    
+    embed = discord.Embed(
+        title="📌 Configuration - Logs Messages",
+        description=f"Les logs de messages seront envoyés dans {salon.mention}",
+        color=0x00ff00,
+        timestamp=discord.utils.utcnow()
+    )
+    embed.add_field(name="Type", value="Messages envoyés, modifiés, supprimés", inline=False)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="logs-moderation", description="Configure le salon pour les logs de modération")
+@discord.app_commands.describe(salon="Salon de destination pour les logs")
+@discord.app_commands.checks.has_permissions(administrator=True)
+async def logs_moderation(interaction: discord.Interaction, salon: discord.TextChannel):
+    if not isinstance(config.CONFIG, dict):
+        config.CONFIG = {}
+    config.CONFIG.setdefault("logs", {})
+    config.CONFIG["logs"]["moderation"] = salon.id
+    
+    embed = discord.Embed(
+        title="📌 Configuration - Logs Modération",
+        description=f"Les logs de modération seront envoyés dans {salon.mention}",
+        color=0xff9900,
+        timestamp=discord.utils.utcnow()
+    )
+    embed.add_field(name="Type", value="Création/suppression/modification de salons, rôles, pseudos, bans, kicks, mutes", inline=False)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="logs-vocal", description="Configure le salon pour les logs vocaux")
+@discord.app_commands.describe(salon="Salon de destination pour les logs")
+@discord.app_commands.checks.has_permissions(administrator=True)
+async def logs_vocal(interaction: discord.Interaction, salon: discord.TextChannel):
+    if not isinstance(config.CONFIG, dict):
+        config.CONFIG = {}
+    config.CONFIG.setdefault("logs", {})
+    config.CONFIG["logs"]["vocal"] = salon.id
+    
+    embed = discord.Embed(
+        title="📌 Configuration - Logs Vocaux",
+        description=f"Les logs vocaux seront envoyés dans {salon.mention}",
+        color=0x0099ff,
+        timestamp=discord.utils.utcnow()
+    )
+    embed.add_field(name="Type", value="Connexions et déconnexions vocales", inline=False)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="logs-ticket", description="Configure le salon pour les logs de tickets")
+@discord.app_commands.describe(salon="Salon de destination pour les logs")
+@discord.app_commands.checks.has_permissions(administrator=True)
+async def logs_ticket(interaction: discord.Interaction, salon: discord.TextChannel):
+    if not isinstance(config.CONFIG, dict):
+        config.CONFIG = {}
+    config.CONFIG.setdefault("logs", {})
+    config.CONFIG["logs"]["ticket"] = salon.id
+    
+    embed = discord.Embed(
+        title="📌 Configuration - Logs Tickets",
+        description=f"Les logs de tickets seront envoyés dans {salon.mention}",
+        color=0x9900ff,
+        timestamp=discord.utils.utcnow()
+    )
+    embed.add_field(name="Type", value="Création, fermeture, prise en charge de tickets", inline=False)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="logs-giveaway", description="Configure le salon pour les logs de giveaways")
+@discord.app_commands.describe(salon="Salon de destination pour les logs")
+@discord.app_commands.checks.has_permissions(administrator=True)
+async def logs_giveaway(interaction: discord.Interaction, salon: discord.TextChannel):
+    if not isinstance(config.CONFIG, dict):
+        config.CONFIG = {}
+    config.CONFIG.setdefault("logs", {})
+    config.CONFIG["logs"]["giveaway"] = salon.id
+    
+    embed = discord.Embed(
+        title="📌 Configuration - Logs Giveaways",
+        description=f"Les logs de giveaways seront envoyés dans {salon.mention}",
+        color=0xffff00,
+        timestamp=discord.utils.utcnow()
+    )
+    embed.add_field(name="Type", value="Création, fin, gagnants des giveaways", inline=False)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="logs-securite", description="Configure le salon pour les logs de sécurité")
+@discord.app_commands.describe(salon="Salon de destination pour les logs")
+@discord.app_commands.checks.has_permissions(administrator=True)
+async def logs_securite(interaction: discord.Interaction, salon: discord.TextChannel):
+    if not isinstance(config.CONFIG, dict):
+        config.CONFIG = {}
+    config.CONFIG.setdefault("logs", {})
+    config.CONFIG["logs"]["securite"] = salon.id
+    
+    embed = discord.Embed(
+        title="📌 Configuration - Logs Sécurité",
+        description=f"Les logs de sécurité seront envoyés dans {salon.mention}",
+        color=0xff0000,
+        timestamp=discord.utils.utcnow()
+    )
+    embed.add_field(name="Type", value="Tentatives suspectes, contenu suspect, alertes de sécurité", inline=False)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
 bot.run(config.DISCORD_TOKEN)
