@@ -4,7 +4,26 @@ from discord.ext import commands
 import core_config as config
 import asyncio
 import inspect
+from flask import Flask
+from threading import Thread
 
+# === MINI SERVEUR WEB POUR RENDRE/KEEP ALIVE ===
+app = Flask("")
+
+@app.route("/")
+def home():
+    return "Bot en ligne ✅"
+
+def run():
+    app.run(host="0.0.0.0", port=8080)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
+keep_alive()  # démarre le serveur en parallèle
+
+# === CONFIGURATION DU BOT DISCORD ===
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
