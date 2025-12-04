@@ -228,6 +228,7 @@ async def on_ready():
     print(f"✅ {bot.user} est en ligne !")
     
     if not cogs_loaded:
+        # Charger UNIQUEMENT les listeners (pas de commandes ici!)
         cog_paths = [
             "cogs.logging",
             "cogs.security.antiraid",
@@ -239,18 +240,21 @@ async def on_ready():
         for cog in cog_paths:
             try:
                 await bot.load_extension(cog)
-                print(f"✅ Cog chargé : {cog}")
+                print(f"✅ Cog (listener) chargé : {cog}")
             except Exception as e:
                 print(f"❌ Erreur chargement {cog} : {e}")
 
-        await asyncio.sleep(2)
+        # Attendre que les cogs soient chargés
+        await asyncio.sleep(1)
 
+        # SYNCHRONISER LES COMMANDES
         try:
             if config.GUILD_ID:
                 guild = discord.Object(id=config.GUILD_ID)
                 bot.tree.copy_global_to(guild=guild)
                 synced = await bot.tree.sync(guild=guild)
-                print(f"✅ {len(synced)} commandes synchronisées : {[c.name for c in synced]}")
+                print(f"✅ {len(synced)} commandes synchronisées !")
+                print(f"📝 Commandes : {[c.name for c in synced]}")
             else:
                 synced = await bot.tree.sync()
                 print(f"✅ {len(synced)} commandes globales synchronisées")
@@ -259,9 +263,10 @@ async def on_ready():
         
         cogs_loaded = True
         
-        # Ajouter les views persistantes
+        # AJOUTER LES VIEWS PERSISTANTES
         bot.add_view(TicketView())
         bot.add_view(TicketControls(0))
+        print("✅ Views ticket enregistrées")
 
 
 
