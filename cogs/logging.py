@@ -262,7 +262,11 @@ class LoggingCog(commands.Cog):
             for opt in interaction.data["options"]:
                 args[opt["name"]] = opt.get("value")
 
-        full_command = f"/{interaction.command.name}"
+        if interaction.command is not None:
+            full_command = f"/{interaction.command.name}"
+        else:
+            full_command = "commande inconnue"
+
         reason = args.get("raison", "")
 
         # === LOG DES SANCTIONS SANS RAISON (dans 'bavures') ===
