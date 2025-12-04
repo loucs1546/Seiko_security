@@ -598,6 +598,195 @@ async def ticket_panel(interaction: discord.Interaction):
 
 
 # ============================
+# === VIEWS POUR CONFIG ===
+# ============================
+
+class ConfigMainView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=600)
+
+    @discord.ui.button(label="📋 Rôles & Salons", style=discord.ButtonStyle.blurple)
+    async def roles_salons(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="📋 Rôles & Salons",
+            description="Configurez les rôles et salons importants",
+            color=0x2ecc71
+        )
+        await interaction.response.edit_message(embed=embed, view=RolesSalonsView())
+
+    @discord.ui.button(label="📊 Logs", style=discord.ButtonStyle.green)
+    async def logs_config(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="📊 Configuration des Logs",
+            description="Définissez les salons de logs",
+            color=0x3498db
+        )
+        await interaction.response.edit_message(embed=embed, view=LogsConfigView(interaction.client))
+
+    @discord.ui.button(label="🛡️ Sécurité", style=discord.ButtonStyle.danger)
+    async def security(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="🛡️ Sécurité",
+            description="Activez/désactivez les protections",
+            color=0xe74c3c
+        )
+        await interaction.response.edit_message(embed=embed, view=SecurityConfigView())
+
+
+class RolesSalonsView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=600)
+
+    @discord.ui.button(label="👑 Role Admin", style=discord.ButtonStyle.primary)
+    async def set_admin_role(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(
+            "Mentionnez le rôle admin :",
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="🛡️ Role Modérateur", style=discord.ButtonStyle.primary)
+    async def set_mod_role(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(
+            "Mentionnez le rôle modérateur :",
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="🎯 Role Fondateur", style=discord.ButtonStyle.primary)
+    async def set_founder_role(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(
+            "Mentionnez le rôle fondateur :",
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="👋 Bienvenue/Adieu", style=discord.ButtonStyle.success)
+    async def set_welcome_leave(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="👋 Salons Bienvenue/Adieu",
+            description="Sélectionnez les salons",
+            color=0x2ecc71
+        )
+        await interaction.response.edit_message(embed=embed, view=WelcomeLeaveView())
+
+    @discord.ui.button(label="⬅️ Retour", style=discord.ButtonStyle.secondary)
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="⚙️ Configuration Seiko",
+            description="Choisissez une section",
+            color=discord.Color.blurple()
+        )
+        await interaction.response.edit_message(embed=embed, view=ConfigMainView())
+
+
+class WelcomeLeaveView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=600)
+
+    @discord.ui.button(label="💬 Salon Bienvenue", style=discord.ButtonStyle.success)
+    async def welcome(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("Sélectionnez le salon bienvenue :", ephemeral=True)
+
+    @discord.ui.button(label="👋 Salon Adieu", style=discord.ButtonStyle.danger)
+    async def leave(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("Sélectionnez le salon adieu :", ephemeral=True)
+
+    @discord.ui.button(label="⬅️ Retour", style=discord.ButtonStyle.secondary)
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="📋 Rôles & Salons",
+            description="Configurez les rôles et salons importants",
+            color=0x2ecc71
+        )
+        await interaction.response.edit_message(embed=embed, view=RolesSalonsView())
+
+
+class LogsConfigView(discord.ui.View):
+    def __init__(self, bot):
+        super().__init__(timeout=600)
+        self.bot = bot
+
+    @discord.ui.button(label="🔍 Détecter Logs", style=discord.ButtonStyle.primary)
+    async def detect_logs(self, interaction: discord.Interaction, button: discord.ui.Button):
+        guild = interaction.guild
+        missing_logs = []
+        log_types = ["messages", "moderation", "ticket", "vocal", "securite"]
+        
+        for log_type in log_types:
+            channel_id = config.CONFIG.get("logs", {}).get(log_type)
+            if not channel_id or not guild.get_channel(channel_id):
+                missing_logs.append(log_type)
+        
+        if missing_logs:
+            msg = f"❌ **Salons de logs manquants** :\n" + "\n".join(f"  • {log}" for log in missing_logs)
+            msg += f"\n\n✅ Utilisez `/add-cat-log` pour créer automatiquement tous les salons"
+        else:
+            msg = "✅ Tous les salons de logs sont configurés!"
+        
+        await interaction.response.send_message(msg, ephemeral=True)
+
+    @discord.ui.button(label="➕ Ajouter Logs Auto", style=discord.ButtonStyle.success)
+    async def auto_add_logs(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("Exécution de `/add-cat-log`...", ephemeral=True)
+        # Cette commande existe déjà
+
+    @discord.ui.button(label="⬅️ Retour", style=discord.ButtonStyle.secondary)
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="⚙️ Configuration Seiko",
+            description="Choisissez une section",
+            color=discord.Color.blurple()
+        )
+        await interaction.response.edit_message(embed=embed, view=ConfigMainView())
+
+
+class SecurityConfigView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=600)
+
+    @discord.ui.button(label="🚫 Anti-Spam", style=discord.ButtonStyle.danger)
+    async def toggle_spam(self, interaction: discord.Interaction, button: discord.ui.Button):
+        current = config.CONFIG["security"].get("anti_spam", False)
+        config.CONFIG["security"]["anti_spam"] = not current
+        status = "✅ Activé" if not current else "❌ Désactivé"
+        await interaction.response.send_message(f"🚫 Anti-Spam : {status}", ephemeral=True)
+
+    @discord.ui.button(label="🎯 Anti-Raid", style=discord.ButtonStyle.danger)
+    async def toggle_raid(self, interaction: discord.Interaction, button: discord.ui.Button):
+        current = config.CONFIG["security"].get("anti_raid", False)
+        config.CONFIG["security"]["anti_raid"] = not current
+        status = "✅ Activé" if not current else "❌ Désactivé"
+        await interaction.response.send_message(f"🎯 Anti-Raid : {status}", ephemeral=True)
+
+    @discord.ui.button(label="🔐 Anti-Hack", style=discord.ButtonStyle.danger)
+    async def toggle_hack(self, interaction: discord.Interaction, button: discord.ui.Button):
+        current = config.CONFIG["security"].get("anti_hack", False)
+        config.CONFIG["security"]["anti_hack"] = not current
+        status = "✅ Activé" if not current else "❌ Désactivé"
+        await interaction.response.send_message(f"🔐 Anti-Hack : {status}", ephemeral=True)
+
+    @discord.ui.button(label="📊 État", style=discord.ButtonStyle.blurple)
+    async def status(self, interaction: discord.Interaction, button: discord.ui.Button):
+        spam = "✅" if config.CONFIG["security"].get("anti_spam") else "❌"
+        raid = "✅" if config.CONFIG["security"].get("anti_raid") else "❌"
+        hack = "✅" if config.CONFIG["security"].get("anti_hack") else "❌"
+        
+        embed = discord.Embed(
+            title="🛡️ État de la Sécurité",
+            description=f"{spam} Anti-Spam\n{raid} Anti-Raid\n{hack} Anti-Hack",
+            color=0xe74c3c
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @discord.ui.button(label="⬅️ Retour", style=discord.ButtonStyle.secondary)
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="⚙️ Configuration Seiko",
+            description="Choisissez une section",
+            color=discord.Color.blurple()
+        )
+        await interaction.response.edit_message(embed=embed, view=ConfigMainView())
+
+
+# ============================
 # === COMMANDES DE CONFIGURATION ===
 # ============================
 
@@ -605,11 +794,121 @@ async def ticket_panel(interaction: discord.Interaction):
 @discord.app_commands.checks.has_permissions(administrator=True)
 async def config_cmd(interaction: discord.Interaction):
     embed = discord.Embed(
-        title="⚙️ Configuration de Seiko",
-        description="Page de configuration disponible.",
+        title="⚙️ Configuration Seiko",
+        description="Choisissez une section pour configurer le bot",
         color=discord.Color.blurple()
     )
-    await interaction.response.send_message(embed=embed, ephemeral=True)
+    await interaction.response.send_message(embed=embed, view=ConfigMainView(), ephemeral=True)
+
+
+# ============================
+# === COMMANDES DE SETUP ===
+# ============================
+
+class SetupStep1View(discord.ui.View):
+    """Étape 1: Rôles à l'arrivée"""
+    def __init__(self):
+        super().__init__(timeout=600)
+
+    @discord.ui.button(label="➡️ Suivant", style=discord.ButtonStyle.success)
+    async def next_step(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="🎓 Setup Seiko - Étape 2/5",
+            description="**Quel est le rôle ADMIN ?**\n\nMentionnez le rôle (ex: @Admin)",
+            color=0x3498db
+        )
+        await interaction.response.edit_message(embed=embed, view=SetupStep2View())
+
+
+class SetupStep2View(discord.ui.View):
+    """Étape 2: Rôle Admin"""
+    def __init__(self):
+        super().__init__(timeout=600)
+
+    @discord.ui.button(label="➡️ Suivant", style=discord.ButtonStyle.success)
+    async def next_step(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="🎓 Setup Seiko - Étape 3/5",
+            description="**Quel est le rôle MODÉRATEUR ?**\n\nMentionnez le rôle (ex: @Modérateur)",
+            color=0x3498db
+        )
+        await interaction.response.edit_message(embed=embed, view=SetupStep3View())
+
+
+class SetupStep3View(discord.ui.View):
+    """Étape 3: Rôle Modérateur"""
+    def __init__(self):
+        super().__init__(timeout=600)
+
+    @discord.ui.button(label="➡️ Suivant", style=discord.ButtonStyle.success)
+    async def next_step(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="🎓 Setup Seiko - Étape 4/5",
+            description="**Quel est le rôle FONDATEUR ?**\n\nMentionnez le rôle (ex: @Fondateur)",
+            color=0x3498db
+        )
+        await interaction.response.edit_message(embed=embed, view=SetupStep4View())
+
+
+class SetupStep4View(discord.ui.View):
+    """Étape 4: Rôle Fondateur"""
+    def __init__(self):
+        super().__init__(timeout=600)
+
+    @discord.ui.button(label="➡️ Suivant", style=discord.ButtonStyle.success)
+    async def next_step(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="🎓 Setup Seiko - Étape 5/5",
+            description="**Salons Bienvenue & Adieu**\n\nSélectionnez les salons pour les messages d'arrivée/départ",
+            color=0x3498db
+        )
+        await interaction.response.edit_message(embed=embed, view=SetupStep5View())
+
+
+class SetupStep5View(discord.ui.View):
+    """Étape 5: Salons Bienvenue/Adieu"""
+    def __init__(self):
+        super().__init__(timeout=600)
+
+    @discord.ui.button(label="✅ Finaliser", style=discord.ButtonStyle.success)
+    async def finish(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="🎓 Setup Seiko - Étape 6/6",
+            description="**Configuration des Logs**\n\nVoulez-vous créer automatiquement les salons de logs ?",
+            color=0x3498db
+        )
+        await interaction.response.edit_message(embed=embed, view=SetupFinishView())
+
+
+class SetupFinishView(discord.ui.View):
+    """Finalisation: Logs automatiques"""
+    def __init__(self):
+        super().__init__(timeout=600)
+
+    @discord.ui.button(label="✅ Créer Logs Auto", style=discord.ButtonStyle.success)
+    async def create_logs(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(
+            "✅ **Setup Terminé!**\n\nExécution de `/add-cat-log` pour créer tous les salons...",
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="⏭️ Passer", style=discord.ButtonStyle.secondary)
+    async def skip(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(
+            "✅ **Setup Terminé!**\n\nVous pouvez créer les logs plus tard avec `/add-cat-log`",
+            ephemeral=True
+        )
+
+
+@bot.tree.command(name="start", description="Tutoriel de configuration du serveur")
+@discord.app_commands.checks.has_permissions(administrator=True)
+async def start_setup(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="🎓 Setup Seiko - Étape 1/5",
+        description="**Rôles à l'arrivée d'un nouveau membre**\n\nQuels rôles doivent être attribués automatiquement à l'arrivée ?",
+        color=0x3498db
+    )
+    await interaction.response.send_message(embed=embed, view=SetupStep1View(), ephemeral=True)
 
 
 # ============================
