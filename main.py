@@ -72,7 +72,7 @@ class TicketView(discord.ui.View):
 
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True, embed_links=True),
+            user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=False, embed_links=False),
             guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True),
         }
 
@@ -639,24 +639,71 @@ class RolesSalonsView(discord.ui.View):
 
     @discord.ui.button(label="👑 Role Admin", style=discord.ButtonStyle.primary)
     async def set_admin_role(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message(
-            "Mentionnez le rôle admin :",
-            ephemeral=True
-        )
+        class RoleModal(discord.ui.Modal, title="Définir rôle Admin"):
+            role_input = discord.ui.TextInput(label="Rôle (mention ou ID)", placeholder="@Admin ou 1234567890123456", required=True)
+            async def on_submit(self, modal_interaction: discord.Interaction):
+                value = self.role_input.value.strip()
+                # try to parse ID
+                role_id = None
+                if value.isdigit():
+                    role_id = int(value)
+                else:
+                    # extract digits from mention
+                    import re
+                    m = re.search(r"(\d{17,20})", value)
+                    if m:
+                        role_id = int(m.group(1))
+                if role_id:
+                    config.CONFIG.setdefault("roles", {})["admin"] = role_id
+                    await modal_interaction.response.send_message(f"✅ Rôle admin défini : <@&{role_id}>", ephemeral=True)
+                else:
+                    await modal_interaction.response.send_message("❌ Rôle invalide.", ephemeral=True)
+
+        await interaction.response.send_modal(RoleModal())
 
     @discord.ui.button(label="🛡️ Role Modérateur", style=discord.ButtonStyle.primary)
     async def set_mod_role(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message(
-            "Mentionnez le rôle modérateur :",
-            ephemeral=True
-        )
+        class RoleModal(discord.ui.Modal, title="Définir rôle Modérateur"):
+            role_input = discord.ui.TextInput(label="Rôle (mention ou ID)", placeholder="@Modérateur ou 1234567890123456", required=True)
+            async def on_submit(self, modal_interaction: discord.Interaction):
+                value = self.role_input.value.strip()
+                role_id = None
+                if value.isdigit():
+                    role_id = int(value)
+                else:
+                    import re
+                    m = re.search(r"(\d{17,20})", value)
+                    if m:
+                        role_id = int(m.group(1))
+                if role_id:
+                    config.CONFIG.setdefault("roles", {})["moderator"] = role_id
+                    await modal_interaction.response.send_message(f"✅ Rôle modérateur défini : <@&{role_id}>", ephemeral=True)
+                else:
+                    await modal_interaction.response.send_message("❌ Rôle invalide.", ephemeral=True)
+
+        await interaction.response.send_modal(RoleModal())
 
     @discord.ui.button(label="🎯 Role Fondateur", style=discord.ButtonStyle.primary)
     async def set_founder_role(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message(
-            "Mentionnez le rôle fondateur :",
-            ephemeral=True
-        )
+        class RoleModal(discord.ui.Modal, title="Définir rôle Fondateur"):
+            role_input = discord.ui.TextInput(label="Rôle (mention ou ID)", placeholder="@Fondateur ou 1234567890123456", required=True)
+            async def on_submit(self, modal_interaction: discord.Interaction):
+                value = self.role_input.value.strip()
+                role_id = None
+                if value.isdigit():
+                    role_id = int(value)
+                else:
+                    import re
+                    m = re.search(r"(\d{17,20})", value)
+                    if m:
+                        role_id = int(m.group(1))
+                if role_id:
+                    config.CONFIG.setdefault("roles", {})["founder"] = role_id
+                    await modal_interaction.response.send_message(f"✅ Rôle fondateur défini : <@&{role_id}>", ephemeral=True)
+                else:
+                    await modal_interaction.response.send_message("❌ Rôle invalide.", ephemeral=True)
+
+        await interaction.response.send_modal(RoleModal())
 
     @discord.ui.button(label="👋 Bienvenue/Adieu", style=discord.ButtonStyle.success)
     async def set_welcome_leave(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -683,11 +730,47 @@ class WelcomeLeaveView(discord.ui.View):
 
     @discord.ui.button(label="💬 Salon Bienvenue", style=discord.ButtonStyle.success)
     async def welcome(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("Sélectionnez le salon bienvenue :", ephemeral=True)
+        class ChannelModal(discord.ui.Modal, title="Salon Bienvenue"):
+            chan_input = discord.ui.TextInput(label="Salon (mention ou ID)", placeholder="#bienvenue ou 1234567890123456", required=True)
+            async def on_submit(self, modal_interaction: discord.Interaction):
+                value = self.chan_input.value.strip()
+                chan_id = None
+                if value.isdigit():
+                    chan_id = int(value)
+                else:
+                    import re
+                    m = re.search(r"(\d{17,20})", value)
+                    if m:
+                        chan_id = int(m.group(1))
+                if chan_id:
+                    config.CONFIG.setdefault("channels", {})["welcome"] = chan_id
+                    await modal_interaction.response.send_message(f"✅ Salon bienvenue défini : <#{chan_id}>", ephemeral=True)
+                else:
+                    await modal_interaction.response.send_message("❌ Salon invalide.", ephemeral=True)
+
+        await interaction.response.send_modal(ChannelModal())
 
     @discord.ui.button(label="👋 Salon Adieu", style=discord.ButtonStyle.danger)
     async def leave(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("Sélectionnez le salon adieu :", ephemeral=True)
+        class ChannelModal(discord.ui.Modal, title="Salon Adieu"):
+            chan_input = discord.ui.TextInput(label="Salon (mention ou ID)", placeholder="#adieu ou 1234567890123456", required=True)
+            async def on_submit(self, modal_interaction: discord.Interaction):
+                value = self.chan_input.value.strip()
+                chan_id = None
+                if value.isdigit():
+                    chan_id = int(value)
+                else:
+                    import re
+                    m = re.search(r"(\d{17,20})", value)
+                    if m:
+                        chan_id = int(m.group(1))
+                if chan_id:
+                    config.CONFIG.setdefault("channels", {})["leave"] = chan_id
+                    await modal_interaction.response.send_message(f"✅ Salon adieu défini : <#{chan_id}>", ephemeral=True)
+                else:
+                    await modal_interaction.response.send_message("❌ Salon invalide.", ephemeral=True)
+
+        await interaction.response.send_modal(ChannelModal())
 
     @discord.ui.button(label="⬅️ Retour", style=discord.ButtonStyle.secondary)
     async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -785,6 +868,26 @@ class SecurityConfigView(discord.ui.View):
         )
         await interaction.response.edit_message(embed=embed, view=ConfigMainView())
 
+    @discord.ui.button(label="🔤 Autorisations", style=discord.ButtonStyle.secondary)
+    async def set_permissions(self, interaction: discord.Interaction, button: discord.ui.Button):
+        class PermModal(discord.ui.Modal, title="Définir commandes autorisées pour un rôle"):
+            role_input = discord.ui.TextInput(label="Rôle (mention ou ID)", placeholder="@Role ou 1234567890123456", required=True)
+            cmds_input = discord.ui.TextInput(label="Commandes autorisées", placeholder="ping, ticket-panel, kick", required=True)
+            async def on_submit(self, modal_interaction: discord.Interaction):
+                role_val = self.role_input.value.strip()
+                cmds_val = self.cmds_input.value.strip()
+                import re
+                m = re.search(r"(\d{17,20})", role_val)
+                role_id = int(m.group(1)) if m else (int(role_val) if role_val.isdigit() else None)
+                if not role_id:
+                    await modal_interaction.response.send_message("❌ Rôle invalide.", ephemeral=True)
+                    return
+                cmds = [c.strip() for c in cmds_val.split(",") if c.strip()]
+                config.CONFIG.setdefault("roles_permissions", {})[str(role_id)] = cmds
+                await modal_interaction.response.send_message(f"✅ Permissions définies pour <@&{role_id}>: {', '.join(cmds)}", ephemeral=True)
+
+        await interaction.response.send_modal(PermModal())
+
 
 # ============================
 # === COMMANDES DE CONFIGURATION ===
@@ -799,6 +902,22 @@ async def config_cmd(interaction: discord.Interaction):
         color=discord.Color.blurple()
     )
     await interaction.response.send_message(embed=embed, view=ConfigMainView(), ephemeral=True)
+
+
+@bot.tree.command(name="salon-words", description="Active/désactive la détection de mots vulgaires dans les salons")
+@discord.app_commands.describe(actif="True ou False")
+@discord.app_commands.checks.has_permissions(administrator=True)
+async def salon_words(interaction: discord.Interaction, actif: bool):
+    config.CONFIG.setdefault("security", {})["filter_words"] = actif
+    await interaction.response.send_message(f"✅ Détection des mots vulgaires {'activée' if actif else 'désactivée'}.", ephemeral=True)
+
+
+@bot.tree.command(name="salon-links", description="Active/désactive la détection des liens dans les salons")
+@discord.app_commands.describe(actif="True ou False")
+@discord.app_commands.checks.has_permissions(administrator=True)
+async def salon_links(interaction: discord.Interaction, actif: bool):
+    config.CONFIG.setdefault("security", {})["filter_links"] = actif
+    await interaction.response.send_message(f"✅ Détection des liens {'activée' if actif else 'désactivée'}.", ephemeral=True)
 
 
 # ============================

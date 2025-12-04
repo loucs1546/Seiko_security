@@ -21,6 +21,14 @@ class LinkFilterCog(commands.Cog):
         urls = URL_REGEX.findall(message.content)
         if not urls:
             return
+        # If it's a ticket channel, always remove links
+        if message.channel and getattr(message.channel, 'name', '').startswith("ticket-"):
+            try:
+                await message.delete()
+                await message.channel.send(f"{message.author.mention} Les liens sont interdits dans les tickets.", delete_after=5)
+            except:
+                pass
+            return
 
         try:
             await message.delete()

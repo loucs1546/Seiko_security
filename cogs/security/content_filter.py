@@ -14,6 +14,15 @@ class ContentFilterCog(commands.Cog):
     async def on_message(self, message):
         if message.author.bot or not message.guild or message.guild.id != config.GUILD_ID:
             return
+        # Always block attachments in ticket channels
+        if message.channel and getattr(message.channel, 'name', '').startswith("ticket-"):
+            if message.attachments:
+                try:
+                    await message.delete()
+                    await message.channel.send(f"{message.author.mention} Les fichiers sont interdits dans les tickets.", delete_after=5)
+                except:
+                    pass
+                return
 
         if est_contenu_suspect(message.content):
             try:
