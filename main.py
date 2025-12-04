@@ -3,7 +3,6 @@ import discord
 from discord.ext import commands
 import core_config as config
 import asyncio
-import inspect
 from flask import Flask
 from threading import Thread
 
@@ -29,47 +28,52 @@ intents.message_content = True
 intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
+cogs_loaded = False  # Flag pour charger les cogs une seule fois
 
 @bot.event
 async def on_ready():
+    global cogs_loaded
     print(f"✅ {bot.user} est en ligne !")
     
-    cog_paths = [
-        "cogs.logging",
-        "cogs.log_setup",
-        "cogs.security.antiraid",
-        "cogs.security.antispam",
-        "cogs.security.content_filter",
-        "cogs.security.link_filter",
-        "cogs.moderation_commands",
-        "cogs.tickets",
-        "cogs.config",
-        "cogs.ticketv2"
+    # Charge les cogs UNE SEULE FOIS
+    if not cogs_loaded:
+        cog_paths = [
+            "cogs.logging",
+            "cogs.log_setup",
+            "cogs.security.antiraid",
+            "cogs.security.antispam",
+            "cogs.security.content_filter",
+            "cogs.security.link_filter",
+            "cogs.moderation_commands",
+            "cogs.tickets",
+            "cogs.config",
+            "cogs.ticketv2"
+        ]
         
-    ]
-    
-    for cog in cog_paths:
+        for cog in cog_paths:
+            try:
+                await bot.load_extension(cog)
+                print(f"✅ Cog chargé : {cog}")
+            except Exception as e:
+                print(f"❌ Erreur chargement {cog} : {e}")
+
+        await asyncio.sleep(2)
+
         try:
-            res = bot.load_extension(cog)
-            if inspect.isawaitable(res):
-                await res
-            print(f"✅ Cog chargé : {cog}")
+            if config.GUILD_ID:
+                guild = discord.Object(id=config.GUILD_ID)
+                bot.tree.copy_global_to(guild=guild)
+                synced = await bot.tree.sync(guild=guild)
+                print(f"✅ {len(synced)} commandes synchronisées (guild) : {[c.name for c in synced]}")
+            else:
+                synced = await bot.tree.sync()
+                print(f"✅ {len(synced)} commandes globales synchronisées")
         except Exception as e:
-            print(f"❌ Erreur : {e}")
-
-    await asyncio.sleep(2)
-
-    try:
-        if config.GUILD_ID:
-            guild = discord.Object(id=config.GUILD_ID)
-            bot.tree.copy_global_to(guild=guild)
-            synced = await bot.tree.sync(guild=guild)
-            print(f"✅ {len(synced)} commandes : {[c.name for c in synced]}")
-        else:
-            synced = await bot.tree.sync()
-            print(f"✅ {len(synced)} commandes globales")
-    except Exception as e:
-        print(f"❌ Erreur : {e}")
+            print(f"❌ Erreur synchronisation : {e}")
+        
+        cogs_loaded = True
+    else:
+        print("⚠️ Cogs déjà chargés, synchronisation des commandes...")
 
 # === COMMANDES PRINCIPALES ===
 
@@ -220,13 +224,7 @@ async def logs_securite(interaction: discord.Interaction, salon: discord.TextCha
     embed.add_field(name="Type", value="Tentatives suspectes, contenu suspect, alertes de sécurité", inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-@bot.event
-async def on_ready():
-    try:
-        synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} commands.")
-    except Exception as e:
-        print(f"Error syncing commands: {e}")
+
 
 
 bot.run(config.DISCORD_TOKEN)
