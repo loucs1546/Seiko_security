@@ -264,7 +264,6 @@ async def on_ready():
         bot.add_view(TicketControls(0))
 
 
-
 # ============================
 # === COMMANDES GÉNÉRALES ===
 # ============================
