@@ -50,7 +50,19 @@ class LogSetupCog(commands.Cog):
 
             channel_ids = {}
             for name, key in salon_configs:
-                channel = await guild.create_text_channel(name=name, category=category)
+                # Permissions pour le salon de logs : seul le bot peut écrire, personne ne peut supprimer les messages
+                log_overwrites = {
+                    guild.default_role: discord.PermissionOverwrite(
+                        read_messages=False
+                    ),
+                    guild.me: discord.PermissionOverwrite(
+                        read_messages=True, 
+                        send_messages=True,
+                        manage_messages=True  # Le bot peut supprimer, pas les autres
+                    )
+                }
+                # Ajouter les staff pour lire les logs
+                channel = await guild.create_text_channel(name=name, category=category, overwrites=log_overwrites)
                 channel_ids[key] = channel.id
 
             # Stockage cohérent pour le reste du bot
@@ -73,6 +85,44 @@ class LogSetupCog(commands.Cog):
     async def add_cat_log(self, interaction: discord.Interaction):
         # Utilise la méthode réutilisable
         await self._create_category(interaction)
+
+    @discord.app_commands.command(name="create-categorie", description="Crée une catégorie personnalisée")
+    @discord.app_commands.describe(nom="Nom de la catégorie")
+    @discord.app_commands.checks.has_permissions(administrator=True)
+    async def create_categorie(self, interaction: discord.Interaction, nom: str):
+        await interaction.response.defer(ephemeral=True)
+        guild = interaction.guild
+        
+        try:
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(read_messages=True),
+                guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+            }
+            category = await guild.create_category(name=nom, overwrites=overwrites)
+            await interaction.followup.send(
+                f"✅ Catégorie **{category.name}** créée avec succès !\nID : `{category.id}`",
+                ephemeral=True
+            )
+        except Exception as e:
+            await interaction.followup.send(f"❌ Erreur : {str(e)}", ephemeral=True)
+
+    @discord.app_commands.command(name="create-salon", description="Crée un salon dans une catégorie")
+    @discord.app_commands.describe(
+        nom="Nom du salon",
+        categorie="Catégorie où créer le salon"
+    )
+    @discord.app_commands.checks.has_permissions(administrator=True)
+    async def create_salon(self, interaction: discord.Interaction, nom: str, categorie: discord.CategoryChannel):
+        await interaction.response.defer(ephemeral=True)
+        
+        try:
+            channel = await categorie.create_text_channel(name=nom)
+            await interaction.followup.send(
+                f"✅ Salon **#{channel.name}** créé dans **{categorie.name}** !\nID : `{channel.id}`",
+                ephemeral=True
+            )
+        except Exception as e:
+            await interaction.followup.send(f"❌ Erreur : {str(e)}", ephemeral=True)
 
 # View avec bouton "Créer" qui appelle la même méthode
 class LogSetupView(discord.ui.View):
