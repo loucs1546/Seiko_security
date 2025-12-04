@@ -220,4 +220,13 @@ async def logs_securite(interaction: discord.Interaction, salon: discord.TextCha
     embed.add_field(name="Type", value="Tentatives suspectes, contenu suspect, alertes de sécurité", inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
+@bot.event
+async def on_ready():
+    try:
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} commands.")
+    except Exception as e:
+        print(f"Error syncing commands: {e}")
+
+
 bot.run(config.DISCORD_TOKEN)
