@@ -117,28 +117,90 @@ class LogChannelSelect(discord.ui.Select):
 
 # === VIEWS AVEC SELECT MENUS ===
 class RoleSelectView(discord.ui.View):
-    def __init__(self, guild: discord.Guild, role_type: str):
+    def __init__(self, guild: discord.Guild, role_type: str, next_view_factory: callable = None, back_view_factory: callable = None):
+        """next_view_factory: optional callable taking guild and returning a discord.ui.View to show after selection"""
         super().__init__(timeout=600)
+        self.guild = guild
+        self.role_type = role_type
+        self.next_view_factory = next_view_factory
         select = RoleSelect(role_type)
         select.options = [
-            discord.SelectOption(label=role.name, value=str(role.id)) 
-            for role in guild.roles 
+            discord.SelectOption(label=role.name, value=str(role.id))
+            for role in guild.roles
             if role.name != "@everyone"
         ][:25]  # Max 25 options
+
+        async def select_callback(interaction: discord.Interaction):
+            role_id = int(select.values[0])
+            config.CONFIG.setdefault("roles", {})[self.role_type] = role_id
+            # Si une factory est fournie, éditer le message et afficher la vue suivante
+            if self.next_view_factory:
+                try:
+                    await interaction.response.edit_message(content=None, embed=None, view=self.next_view_factory(self.guild))
+                except Exception:
+                    await interaction.response.send_message(f"✅ Rôle {self.role_type} défini : <@&{role_id}>", ephemeral=True)
+            else:
+                await interaction.response.send_message(f"✅ Rôle {self.role_type} défini : <@&{role_id}>", ephemeral=True)
+
+        select.callback = select_callback
         self.add_item(select)
 
-        self.add_item(discord.ui.Button(label="⬅️ Retour", style=discord.ButtonStyle.secondary, custom_id=f"back_{role_type}"))
+        # Bouton retour - utilise back_view_factory si fourni, sinon RolesSalonsView
+        back_factory = back_view_factory or (lambda g: RolesSalonsView(g))
+
+        class BackButton(discord.ui.Button):
+            def __init__(self):
+                super().__init__(label="⬅️ Retour", style=discord.ButtonStyle.secondary)
+
+            async def callback(self, interaction: discord.Interaction):
+                try:
+                    await interaction.response.edit_message(embed=None, view=back_factory(guild))
+                except Exception:
+                    await interaction.response.send_message("🔙 Retour", ephemeral=True)
+
+        self.add_item(BackButton())
 
 
 class ChannelSelectView(discord.ui.View):
-    def __init__(self, guild: discord.Guild, channel_type: str):
+    def __init__(self, guild: discord.Guild, channel_type: str, next_view_factory: callable = None, back_view_factory: callable = None):
         super().__init__(timeout=600)
+        self.guild = guild
+        self.channel_type = channel_type
+        self.next_view_factory = next_view_factory
         select = ChannelSelect(channel_type)
         select.options = [
-            discord.SelectOption(label=channel.name, value=str(channel.id)) 
+            discord.SelectOption(label=channel.name, value=str(channel.id))
             for channel in guild.text_channels
         ][:25]
+
+        async def select_callback(interaction: discord.Interaction):
+            chan_id = int(select.values[0])
+            config.CONFIG.setdefault("channels", {})[self.channel_type] = chan_id
+            if self.next_view_factory:
+                try:
+                    await interaction.response.edit_message(content=None, embed=None, view=self.next_view_factory(self.guild))
+                except Exception:
+                    await interaction.response.send_message(f"✅ Salon {self.channel_type} défini : <#{chan_id}>", ephemeral=True)
+            else:
+                await interaction.response.send_message(f"✅ Salon {self.channel_type} défini : <#{chan_id}>", ephemeral=True)
+
+        select.callback = select_callback
         self.add_item(select)
+
+        # Back button
+        back_factory = back_view_factory or (lambda g: RolesSalonsView(g))
+
+        class BackButton(discord.ui.Button):
+            def __init__(self):
+                super().__init__(label="⬅️ Retour", style=discord.ButtonStyle.secondary)
+
+            async def callback(self, interaction: discord.Interaction):
+                try:
+                    await interaction.response.edit_message(embed=None, view=back_factory(guild))
+                except Exception:
+                    await interaction.response.send_message("🔙 Retour", ephemeral=True)
+
+        self.add_item(BackButton())
 
 
 class LogChannelSelectView(discord.ui.View):
@@ -270,7 +332,7 @@ class TicketChoiceView(discord.ui.View):
 
 class TicketManagementView(discord.ui.View):
     """Boutons de gestion du ticket (Claim, Close, Reopen, Delete)"""
-    def __init__(self, owner_id: int, ticket_num: int):
+    def __init__(self, owner_id: int, ticket_num: int = None):
         super().__init__(timeout=None)
         self.owner_id = owner_id
         self.ticket_num = ticket_num
@@ -555,8 +617,8 @@ async def anti_afk_task():
     index = 0
     while True:
         try:
-            # Attendre 4 minutes avant de changer le status (pour éviter AFK avant 10 min)
-            await asyncio.sleep(240)
+            # Attendre 5 minutes avant de changer le status (pour éviter AFK avant 10 min)
+            await asyncio.sleep(300)
             
             # Changer le status
             activity = statuses[index % len(statuses)]
@@ -565,8 +627,9 @@ async def anti_afk_task():
             
             # Ping la route Flask pour maintenir l'activité
             try:
-                requests.get("http://localhost:8080/ping", timeout=2)
-            except:
+                port = int(os.environ.get("PORT", 8080))
+                requests.get(f"http://127.0.0.1:{port}/ping", timeout=2)
+            except Exception:
                 pass
             
             index += 1
@@ -912,14 +975,29 @@ async def sync_commands(interaction: discord.Interaction):
 @discord.app_commands.checks.has_permissions(administrator=True)
 async def ticket_config(interaction: discord.Interaction):
     """Configurer le mode de tickets (basic/advanced) et les options personnalisées"""
-    await interaction.response.defer(ephemeral=True)
-    
+    used_defer = False
+    try:
+        await interaction.response.defer(ephemeral=True)
+        used_defer = True
+    except Exception:
+        used_defer = False
+
     embed = discord.Embed(
         title="🎟️ Configuration Tickets",
         description="Choisissez le mode de fonctionnement",
         color=0x5865F2
     )
-    await interaction.followup.send(embed=embed, view=TicketConfigView(), ephemeral=True)
+    try:
+        if used_defer:
+            await interaction.followup.send(embed=embed, view=TicketConfigView(), ephemeral=True)
+        else:
+            await interaction.response.send_message(embed=embed, view=TicketConfigView(), ephemeral=True)
+    except Exception as e:
+        # Fallback: try to send a simple ephemeral message
+        try:
+            await interaction.response.send_message("❌ Impossible d'ouvrir l'interface de configuration.", ephemeral=True)
+        except:
+            pass
 
 
 class TicketConfigView(discord.ui.View):
@@ -1075,7 +1153,7 @@ class RolesSalonsView(discord.ui.View):
             description="Choisissez le rôle dans la liste",
             color=0x2ecc71
         )
-        await interaction.response.edit_message(embed=embed, view=RoleSelectView(self.guild, "admin"))
+        await interaction.response.edit_message(embed=embed, view=RoleSelectView(self.guild, "admin", next_view_factory=lambda g: RolesSalonsView(g)))
 
     @discord.ui.button(label="🛡️ Rôle Modérateur", style=discord.ButtonStyle.primary)
     async def set_mod_role(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1084,7 +1162,7 @@ class RolesSalonsView(discord.ui.View):
             description="Choisissez le rôle dans la liste",
             color=0x3498db
         )
-        await interaction.response.edit_message(embed=embed, view=RoleSelectView(self.guild, "moderator"))
+        await interaction.response.edit_message(embed=embed, view=RoleSelectView(self.guild, "moderator", next_view_factory=lambda g: RolesSalonsView(g)))
 
     @discord.ui.button(label="🎯 Rôle Fondateur", style=discord.ButtonStyle.primary)
     async def set_founder_role(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1093,7 +1171,7 @@ class RolesSalonsView(discord.ui.View):
             description="Choisissez le rôle dans la liste",
             color=0xe74c3c
         )
-        await interaction.response.edit_message(embed=embed, view=RoleSelectView(self.guild, "founder"))
+        await interaction.response.edit_message(embed=embed, view=RoleSelectView(self.guild, "founder", next_view_factory=lambda g: RolesSalonsView(g)))
 
     @discord.ui.button(label="👋 Bienvenue/Adieu", style=discord.ButtonStyle.success)
     async def set_welcome_leave(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1126,7 +1204,7 @@ class WelcomeLeaveView(discord.ui.View):
             description="Choisissez le salon dans la liste",
             color=0x2ecc71
         )
-        await interaction.response.edit_message(embed=embed, view=ChannelSelectView(self.guild, "welcome"))
+        await interaction.response.edit_message(embed=embed, view=ChannelSelectView(self.guild, "welcome", next_view_factory=lambda g: RolesSalonsView(g), back_view_factory=lambda g: WelcomeLeaveView(g)))
 
     @discord.ui.button(label="👋 Salon Adieu", style=discord.ButtonStyle.danger)
     async def leave(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1135,7 +1213,7 @@ class WelcomeLeaveView(discord.ui.View):
             description="Choisissez le salon dans la liste",
             color=0xe74c3c
         )
-        await interaction.response.edit_message(embed=embed, view=ChannelSelectView(self.guild, "leave"))
+        await interaction.response.edit_message(embed=embed, view=ChannelSelectView(self.guild, "leave", next_view_factory=lambda g: RolesSalonsView(g), back_view_factory=lambda g: WelcomeLeaveView(g)))
 
     @discord.ui.button(label="⬅️ Retour", style=discord.ButtonStyle.secondary)
     async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1303,7 +1381,7 @@ class SetupStep1View(discord.ui.View):
             description="Choisissez le rôle admin dans la liste",
             color=0x3498db
         )
-        await interaction.response.edit_message(embed=embed, view=RoleSelectView(self.guild, "admin"))
+        await interaction.response.edit_message(embed=embed, view=RoleSelectView(self.guild, "admin", next_view_factory=lambda g: SetupStep2View(g), back_view_factory=lambda g: SetupStep1View(g)))
 
 
 class SetupStep2View(discord.ui.View):
@@ -1319,7 +1397,7 @@ class SetupStep2View(discord.ui.View):
             description="Choisissez le rôle modérateur dans la liste",
             color=0x3498db
         )
-        await interaction.response.edit_message(embed=embed, view=RoleSelectView(self.guild, "moderator"))
+        await interaction.response.edit_message(embed=embed, view=RoleSelectView(self.guild, "moderator", next_view_factory=lambda g: SetupStep3View(g), back_view_factory=lambda g: SetupStep2View(g)))
 
 
 class SetupStep3View(discord.ui.View):
@@ -1335,7 +1413,7 @@ class SetupStep3View(discord.ui.View):
             description="Choisissez le rôle fondateur dans la liste",
             color=0x3498db
         )
-        await interaction.response.edit_message(embed=embed, view=RoleSelectView(self.guild, "founder"))
+        await interaction.response.edit_message(embed=embed, view=RoleSelectView(self.guild, "founder", next_view_factory=lambda g: SetupStep4View(g), back_view_factory=lambda g: SetupStep3View(g)))
 
 
 class SetupStep4View(discord.ui.View):
@@ -1351,7 +1429,7 @@ class SetupStep4View(discord.ui.View):
             description="Choisissez le salon bienvenue dans la liste",
             color=0x3498db
         )
-        await interaction.response.edit_message(embed=embed, view=ChannelSelectView(self.guild, "welcome"))
+        await interaction.response.edit_message(embed=embed, view=ChannelSelectView(self.guild, "welcome", next_view_factory=lambda g: SetupStep5View(g), back_view_factory=lambda g: SetupStep4View(g)))
 
 
 class SetupStep5View(discord.ui.View):
@@ -1367,7 +1445,7 @@ class SetupStep5View(discord.ui.View):
             description="Choisissez le salon adieu dans la liste",
             color=0x3498db
         )
-        await interaction.response.edit_message(embed=embed, view=ChannelSelectView(self.guild, "leave"))
+        await interaction.response.edit_message(embed=embed, view=ChannelSelectView(self.guild, "leave", next_view_factory=lambda g: SetupFinishView(g), back_view_factory=lambda g: SetupStep5View(g)))
 
 
 class SetupFinishView(discord.ui.View):
