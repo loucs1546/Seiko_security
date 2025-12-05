@@ -8,6 +8,7 @@ from asyncio import CancelledError
 from flask import Flask
 from threading import Thread
 from datetime import datetime
+from pathlib import Path
 import re
 import io
 import requests
@@ -340,7 +341,7 @@ class TicketManagementView(discord.ui.View):
         self.ticket_num = ticket_num
         self.is_closed = False
     
-    @discord.ui.button(label="👤 Claim", style=discord.ButtonStyle.primary, emoji="✋")
+    @discord.ui.button(label="👤 Claim", style=discord.ButtonStyle.primary, emoji="✋", custom_id="ticket_claim")
     async def claim(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Claim = Clear tous les messages sauf le premier du bot"""
         if not any(role.permissions.administrator or role.permissions.manage_messages for role in interaction.user.roles):
@@ -375,7 +376,7 @@ class TicketManagementView(discord.ui.View):
         )
         await interaction.followup.send(embed=embed)
     
-    @discord.ui.button(label="🔒 Fermer", style=discord.ButtonStyle.danger, emoji="🔒")
+    @discord.ui.button(label="🔒 Fermer", style=discord.ButtonStyle.danger, emoji="🔒", custom_id="ticket_close")
     async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Close = Disable permissions + rename"""
         if not any(role.permissions.administrator or role.permissions.manage_messages for role in interaction.user.roles):
@@ -430,7 +431,7 @@ class TicketManagementView(discord.ui.View):
         )
         await interaction.followup.send(embed=embed)
     
-    @discord.ui.button(label="🔓 Réouvrir", style=discord.ButtonStyle.success, emoji="🔓")
+    @discord.ui.button(label="🔓 Réouvrir", style=discord.ButtonStyle.success, emoji="🔓", custom_id="ticket_reopen")
     async def reopen_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Reopen = Restore permissions"""
         if not any(role.permissions.administrator or role.permissions.manage_messages for role in interaction.user.roles):
@@ -487,7 +488,7 @@ class TicketManagementView(discord.ui.View):
         )
         await interaction.followup.send(embed=embed)
     
-    @discord.ui.button(label="🗑️ Supprimer", style=discord.ButtonStyle.danger, emoji="❌")
+    @discord.ui.button(label="🗑️ Supprimer", style=discord.ButtonStyle.danger, emoji="❌", custom_id="ticket_delete")
     async def delete_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Delete = Supprimer le canal avec confirmation"""
         if not any(role.permissions.administrator or role.permissions.manage_messages for role in interaction.user.roles):
@@ -1072,9 +1073,9 @@ async def ticket_config(interaction: discord.Interaction):
     )
     try:
         if used_defer:
-            await interaction.followup.send(embed=embed, view=TicketConfigView(), ephemeral=True)
+            await interaction.followup.send(embed=embed, view=TicketConfigView(source_channel=None), ephemeral=True)
         else:
-            await interaction.response.send_message(embed=embed, view=TicketConfigView(), ephemeral=True)
+            await interaction.response.send_message(embed=embed, view=TicketConfigView(source_channel=None), ephemeral=True)
     except Exception as e:
         # Fallback: try to send a simple ephemeral message
         try:
@@ -1085,8 +1086,9 @@ async def ticket_config(interaction: discord.Interaction):
 
 class TicketConfigView(discord.ui.View):
     """Interface de configuration du mode tickets"""
-    def __init__(self):
+    def __init__(self, source_channel: discord.TextChannel = None):
         super().__init__(timeout=600)
+        self.source_channel = source_channel
     
     @discord.ui.button(label="Basic Mode", style=discord.ButtonStyle.primary, emoji="⚙️")
     async def basic_mode(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1103,6 +1105,8 @@ class TicketConfigView(discord.ui.View):
             color=0x2ecc71
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
+        # Si appelé depuis /start, envoyer POUR_TOI.txt
+        await self._send_guide_if_needed()
     
     @discord.ui.button(label="Advanced Mode", style=discord.ButtonStyle.success, emoji="✨")
     async def advanced_mode(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1111,6 +1115,8 @@ class TicketConfigView(discord.ui.View):
             description="Vous allez créer vos propres options.\n\nEnvoyez le texte pour la première option (ex: 'Bug Report')",
             color=0x5865F2
         )
+        
+        source_ch = self.source_channel
         
         class OptionsModal(discord.ui.Modal, title="Nouvelle option de ticket"):
             option_input = discord.ui.TextInput(label="Option (100 max chars)", placeholder="Bug Report", max_length=100)
@@ -1157,6 +1163,14 @@ class TicketConfigView(discord.ui.View):
                             color=0x2ecc71
                         )
                         await finish_interaction.response.send_message(embed=embed_done, ephemeral=True)
+                        # Si appelé depuis /start, envoyer POUR_TOI.txt
+                        if source_ch:
+                            try:
+                                file_path = Path('POUR_TOI.txt')
+                                if file_path.exists():
+                                    await source_ch.send(file=discord.File(str(file_path), filename='POUR_TOI.txt'))
+                            except Exception as e:
+                                print(f"[TicketConfig] Erreur envoi POUR_TOI.txt: {e}")
                 
                 embed_first = discord.Embed(
                     title="✅ Option Créée",
@@ -1170,6 +1184,16 @@ class TicketConfigView(discord.ui.View):
                 )
         
         await interaction.response.send_modal(OptionsModal())
+    
+    async def _send_guide_if_needed(self):
+        """Envoie POUR_TOI.txt si source_channel est défini"""
+        if self.source_channel:
+            try:
+                file_path = Path('POUR_TOI.txt')
+                if file_path.exists():
+                    await self.source_channel.send(file=discord.File(str(file_path), filename='POUR_TOI.txt'))
+            except Exception as e:
+                print(f"[TicketConfig] Erreur envoi POUR_TOI.txt: {e}")
 
 
 @bot.tree.command(name="ticket-panel", description="Envoie le panneau de création de ticket")
@@ -1276,6 +1300,20 @@ class ConfigMainView(discord.ui.View):
             color=0xe74c3c
         )
         await interaction.response.edit_message(embed=embed, view=SecurityConfigView())
+
+    @discord.ui.button(label="✅ Terminer", style=discord.ButtonStyle.success)
+    async def finish_and_send_guide(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Envoie le fichier POUR_TOI.txt dans le salon d'où la commande a été utilisée"""
+        await interaction.response.defer(ephemeral=True)
+        try:
+            file_path = Path('POUR_TOI.txt')
+            if file_path.exists():
+                await interaction.followup.send("✅ Guide envoyé dans le salon.", ephemeral=True)
+                await interaction.channel.send(file=discord.File(str(file_path), filename='POUR_TOI.txt'))
+            else:
+                await interaction.followup.send("❌ Le fichier `POUR_TOI.txt` est introuvable.", ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"❌ Erreur en envoyant le guide : {e}", ephemeral=True)
 
 
 class RolesSalonsView(discord.ui.View):
@@ -1507,9 +1545,10 @@ async def salon_links(interaction: discord.Interaction, actif: bool):
 
 class SetupStep1View(discord.ui.View):
     """Étape 1: Rôle Admin"""
-    def __init__(self, guild: discord.Guild):
+    def __init__(self, guild: discord.Guild, source_channel: discord.TextChannel = None):
         super().__init__(timeout=600)
         self.guild = guild
+        self.source_channel = source_channel
 
     @discord.ui.button(label="👑 Sélectionner Rôle Admin", style=discord.ButtonStyle.primary)
     async def select_admin(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1518,14 +1557,15 @@ class SetupStep1View(discord.ui.View):
             description="Choisissez le rôle admin dans la liste",
             color=0x3498db
         )
-        await interaction.response.edit_message(embed=embed, view=RoleSelectView(self.guild, "admin", next_view_factory=lambda g: SetupStep2View(g), back_view_factory=lambda g: SetupStep1View(g)))
+        await interaction.response.edit_message(embed=embed, view=RoleSelectView(self.guild, "admin", next_view_factory=lambda g: SetupStep2View(g, self.source_channel), back_view_factory=lambda g: SetupStep1View(g, self.source_channel)))
 
 
 class SetupStep2View(discord.ui.View):
     """Étape 2: Rôle Modérateur"""
-    def __init__(self, guild: discord.Guild):
+    def __init__(self, guild: discord.Guild, source_channel: discord.TextChannel = None):
         super().__init__(timeout=600)
         self.guild = guild
+        self.source_channel = source_channel
 
     @discord.ui.button(label="🛡️ Sélectionner Rôle Modérateur", style=discord.ButtonStyle.primary)
     async def select_mod(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1534,14 +1574,15 @@ class SetupStep2View(discord.ui.View):
             description="Choisissez le rôle modérateur dans la liste",
             color=0x3498db
         )
-        await interaction.response.edit_message(embed=embed, view=RoleSelectView(self.guild, "moderator", next_view_factory=lambda g: SetupStep3View(g), back_view_factory=lambda g: SetupStep2View(g)))
+        await interaction.response.edit_message(embed=embed, view=RoleSelectView(self.guild, "moderator", next_view_factory=lambda g: SetupStep3View(g, self.source_channel), back_view_factory=lambda g: SetupStep2View(g, self.source_channel)))
 
 
 class SetupStep3View(discord.ui.View):
     """Étape 3: Rôle Fondateur"""
-    def __init__(self, guild: discord.Guild):
+    def __init__(self, guild: discord.Guild, source_channel: discord.TextChannel = None):
         super().__init__(timeout=600)
         self.guild = guild
+        self.source_channel = source_channel
 
     @discord.ui.button(label="🎯 Sélectionner Rôle Fondateur", style=discord.ButtonStyle.primary)
     async def select_founder(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1550,14 +1591,15 @@ class SetupStep3View(discord.ui.View):
             description="Choisissez le rôle fondateur dans la liste",
             color=0x3498db
         )
-        await interaction.response.edit_message(embed=embed, view=RoleSelectView(self.guild, "founder", next_view_factory=lambda g: SetupStep4View(g), back_view_factory=lambda g: SetupStep3View(g)))
+        await interaction.response.edit_message(embed=embed, view=RoleSelectView(self.guild, "founder", next_view_factory=lambda g: SetupStep4View(g, self.source_channel), back_view_factory=lambda g: SetupStep3View(g, self.source_channel)))
 
 
 class SetupStep4View(discord.ui.View):
     """Étape 4: Salon Bienvenue"""
-    def __init__(self, guild: discord.Guild):
+    def __init__(self, guild: discord.Guild, source_channel: discord.TextChannel = None):
         super().__init__(timeout=600)
         self.guild = guild
+        self.source_channel = source_channel
 
     @discord.ui.button(label="💬 Sélectionner Salon Bienvenue", style=discord.ButtonStyle.success)
     async def select_welcome(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1566,14 +1608,15 @@ class SetupStep4View(discord.ui.View):
             description="Choisissez le salon bienvenue dans la liste",
             color=0x3498db
         )
-        await interaction.response.edit_message(embed=embed, view=ChannelSelectView(self.guild, "welcome", next_view_factory=lambda g: SetupStep5View(g), back_view_factory=lambda g: SetupStep4View(g)))
+        await interaction.response.edit_message(embed=embed, view=ChannelSelectView(self.guild, "welcome", next_view_factory=lambda g: SetupStep5View(g, self.source_channel), back_view_factory=lambda g: SetupStep4View(g, self.source_channel)))
 
 
 class SetupStep5View(discord.ui.View):
     """Étape 5: Salon Adieu"""
-    def __init__(self, guild: discord.Guild):
+    def __init__(self, guild: discord.Guild, source_channel: discord.TextChannel = None):
         super().__init__(timeout=600)
         self.guild = guild
+        self.source_channel = source_channel
 
     @discord.ui.button(label="👋 Sélectionner Salon Adieu", style=discord.ButtonStyle.danger)
     async def select_leave(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1582,27 +1625,40 @@ class SetupStep5View(discord.ui.View):
             description="Choisissez le salon adieu dans la liste",
             color=0x3498db
         )
-        await interaction.response.edit_message(embed=embed, view=ChannelSelectView(self.guild, "leave", next_view_factory=lambda g: SetupFinishView(g), back_view_factory=lambda g: SetupStep5View(g)))
+        await interaction.response.edit_message(embed=embed, view=ChannelSelectView(self.guild, "leave", next_view_factory=lambda g: SetupFinishView(g, self.source_channel), back_view_factory=lambda g: SetupStep5View(g, self.source_channel)))
 
 
 class SetupFinishView(discord.ui.View):
-    """Étape Finale: Créer les logs automatiquement"""
-    def __init__(self):
+    """Étape Finale: Configuration des tickets + Création des logs"""
+    def __init__(self, guild: discord.Guild = None, source_channel: discord.TextChannel = None):
         super().__init__(timeout=600)
+        self.guild = guild
+        self.source_channel = source_channel
 
-    @discord.ui.button(label="✅ Créer Logs Auto", style=discord.ButtonStyle.success)
-    async def create_logs(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message(
-            "✅ **Setup Terminé!**\n\nExécution de `/add-cat-log` pour créer tous les salons...",
-            ephemeral=True
+    @discord.ui.button(label="✅ Configurer Tickets", style=discord.ButtonStyle.success)
+    async def configure_tickets(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="🎟️ Configuration Tickets",
+            description="Choisissez le mode de fonctionnement",
+            color=0x5865F2
         )
+        await interaction.response.edit_message(embed=embed, view=TicketConfigView(source_channel=self.source_channel))
 
     @discord.ui.button(label="⏭️ Passer", style=discord.ButtonStyle.secondary)
     async def skip(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message(
-            "✅ **Setup Terminé!**\n\nVous pouvez créer les logs plus tard avec `/add-cat-log`",
+            "✅ **Setup Terminé!**\n\nVous pouvez configurer les tickets plus tard avec `/ticket-config`",
             ephemeral=True
         )
+        # Envoyer POUR_TOI.txt
+        try:
+            file_path = Path('POUR_TOI.txt')
+            if self.source_channel and file_path.exists():
+                await self.source_channel.send(file=discord.File(str(file_path), filename='POUR_TOI.txt'))
+            elif self.source_channel:
+                await self.source_channel.send("📖 Guide introuvable sur le serveur.")
+        except Exception as e:
+            print(f"[Setup] Erreur envoi POUR_TOI.txt: {e}")
 
 
 @bot.tree.command(name="start", description="Tutoriel de configuration du serveur")
@@ -1610,11 +1666,11 @@ class SetupFinishView(discord.ui.View):
 async def start_setup(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     embed = discord.Embed(
-        title="🎓 Setup Seiko - Étape 1/5",
+        title="🎓 Setup Seiko - Étape 1/6",
         description="**Rôles à l'arrivée d'un nouveau membre**\n\nQuels rôles doivent être attribués automatiquement à l'arrivée ?",
         color=0x3498db
     )
-    await interaction.followup.send(embed=embed, view=SetupStep1View(interaction.guild), ephemeral=True)
+    await interaction.followup.send(embed=embed, view=SetupStep1View(interaction.guild, interaction.channel), ephemeral=True)
 
 
 # ============================
