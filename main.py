@@ -707,7 +707,7 @@ class ConfigMainView(discord.ui.View):
             description="Définissez les salons de logs",
             color=0x3498db
         )
-        await interaction.response.edit_message(embed=embed, view=LogsConfigView(interaction.client))
+        await interaction.response.edit_message(embed=embed, view=LogsConfigView(interaction.client, interaction.guild))
 
     @discord.ui.button(label="🛡️ Sécurité", style=discord.ButtonStyle.danger)
     async def security(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -802,9 +802,10 @@ class WelcomeLeaveView(discord.ui.View):
 
 
 class LogsConfigView(discord.ui.View):
-    def __init__(self, bot):
+    def __init__(self, bot, guild: discord.Guild = None):
         super().__init__(timeout=600)
         self.bot = bot
+        self.guild = guild
 
     @discord.ui.button(label="🔍 Détecter Logs", style=discord.ButtonStyle.primary)
     async def detect_logs(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -837,7 +838,8 @@ class LogsConfigView(discord.ui.View):
             description="Choisissez une section",
             color=discord.Color.blurple()
         )
-        await interaction.response.edit_message(embed=embed, view=ConfigMainView(interaction.guild))
+        guild = self.guild or interaction.guild
+        await interaction.response.edit_message(embed=embed, view=ConfigMainView(guild))
 
 
 class SecurityConfigView(discord.ui.View):
@@ -915,12 +917,13 @@ class SecurityConfigView(discord.ui.View):
 @bot.tree.command(name="config", description="Configure le bot")
 @discord.app_commands.checks.has_permissions(administrator=True)
 async def config_cmd(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
     embed = discord.Embed(
         title="⚙️ Configuration Seiko",
         description="Choisissez une section pour configurer le bot",
         color=discord.Color.blurple()
     )
-    await interaction.response.send_message(embed=embed, view=ConfigMainView(interaction.guild), ephemeral=True)
+    await interaction.followup.send(embed=embed, view=ConfigMainView(interaction.guild), ephemeral=True)
 
 
 @bot.tree.command(name="salon-words", description="Active/désactive la détection de mots vulgaires dans les salons")
@@ -1041,12 +1044,13 @@ class SetupFinishView(discord.ui.View):
 @bot.tree.command(name="start", description="Tutoriel de configuration du serveur")
 @discord.app_commands.checks.has_permissions(administrator=True)
 async def start_setup(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
     embed = discord.Embed(
         title="🎓 Setup Seiko - Étape 1/5",
         description="**Rôles à l'arrivée d'un nouveau membre**\n\nQuels rôles doivent être attribués automatiquement à l'arrivée ?",
         color=0x3498db
     )
-    await interaction.response.send_message(embed=embed, view=SetupStep1View(), ephemeral=True)
+    await interaction.followup.send(embed=embed, view=SetupStep1View(interaction.guild), ephemeral=True)
 
 
 # ============================
