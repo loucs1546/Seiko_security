@@ -3,6 +3,8 @@ import discord
 from discord.ext import commands
 import core_config as config
 import asyncio
+import aiohttp
+from asyncio import CancelledError
 from flask import Flask
 from threading import Thread
 from datetime import datetime
@@ -500,23 +502,47 @@ class TicketManagementView(discord.ui.View):
         )
         
         class ConfirmDeleteView(discord.ui.View):
-            def __init__(self, ticket_channel):
+            def __init__(self, ticket_channel, owner_id=None, ticket_num=None):
                 super().__init__(timeout=5)
                 self.ticket_channel = ticket_channel
+                self.owner_id = owner_id
+                self.ticket_num = ticket_num
             
             @discord.ui.button(label="Confirmer", style=discord.ButtonStyle.danger, emoji="✅")
             async def confirm_delete(self, confirm_interaction: discord.Interaction, confirm_button: discord.ui.Button):
                 await confirm_interaction.response.defer()
+                # Envoyer un récap/log avant suppression
+                try:
+                    owner = None
+                    owner_id = getattr(self, 'owner_id', None)
+                    if owner_id:
+                        owner = confirm_interaction.guild.get_member(owner_id)
+
+                    embed_del = discord.Embed(
+                        title="🗑️ Ticket supprimé",
+                        description=f"**Salon**: {self.ticket_channel.name}\n**Supprimé par**: {confirm_interaction.user.mention}",
+                        color=0xe74c3c,
+                        timestamp=datetime.utcnow()
+                    )
+                    if owner:
+                        embed_del.add_field(name="Propriétaire", value=f"{owner.mention} (`{owner}`)")
+                    if getattr(self, 'ticket_num', None):
+                        embed_del.set_footer(text=f"Ticket #{int(self.ticket_num):06d}")
+
+                    await send_log_to(bot, "ticket", embed_del)
+                except Exception:
+                    pass
+
                 try:
                     await self.ticket_channel.delete()
-                except:
+                except Exception:
                     pass
             
             @discord.ui.button(label="Annuler", style=discord.ButtonStyle.secondary, emoji="❌")
             async def cancel_delete(self, cancel_interaction: discord.Interaction, cancel_button: discord.ui.Button):
                 await cancel_interaction.response.send_message("❌ Suppression annulée.", ephemeral=True)
         
-        await interaction.response.send_message(embed=embed, view=ConfirmDeleteView(interaction.channel), ephemeral=True)
+        await interaction.response.send_message(embed=embed, view=ConfirmDeleteView(interaction.channel, owner_id=self.owner_id, ticket_num=self.ticket_num), ephemeral=True)
 
 
 # TicketView REFACTORISÉE - Utilise TicketChoiceView
@@ -534,8 +560,70 @@ class TicketView(discord.ui.View):
             if channel.name.startswith("ticket-") and str(user.id) in channel.name:
                 await interaction.response.send_message("Vous avez déjà un ticket ouvert !", ephemeral=True)
                 return
-        
-        # Afficher l'interface de choix
+
+        # Si le mode est 'basic', créer directement le ticket sans choix
+        mode = config.CONFIG.get("ticket_config", {}).get("mode", "basic")
+        options = config.CONFIG.get("ticket_config", {}).get("options", [])
+        if mode == "basic":
+            selected_option = options[0] if options else "Support Général"
+
+            # Incrémenter le counter
+            config.CONFIG.setdefault("ticket_config", {}).setdefault("counter", 0)
+            ticket_num = config.CONFIG["ticket_config"]["counter"] + 1
+            config.CONFIG["ticket_config"]["counter"] = ticket_num
+
+            # Créer le channel ticket-XXXXXX
+            ticket_name = f"ticket-{str(ticket_num).zfill(6)}"
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                user: discord.PermissionOverwrite(
+                    read_messages=True,
+                    send_messages=True,
+                    attach_files=False,
+                    embed_links=False
+                ),
+                guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True),
+            }
+
+            try:
+                ticket_channel = await guild.create_text_channel(
+                    name=ticket_name,
+                    overwrites=overwrites,
+                    reason=f"Ticket créé par {user} ({selected_option})"
+                )
+            except Exception as e:
+                await interaction.response.send_message(f"❌ Erreur création ticket: {e}", ephemeral=True)
+                return
+
+            # Envoyer le message du bot avec les boutons de gestion
+            embed = discord.Embed(
+                title=f"🎟️ {selected_option} - #{ticket_num:06d}",
+                description=f"Bonjour {user.mention},\n\n📝 Décrivez votre demande en détail. Un membre de l'équipe vous répondra bientôt.\n\n> ⚠️ Les fichiers et liens ne sont pas autorisés dans les tickets.",
+                color=0x5865F2,
+                timestamp=datetime.utcnow()
+            )
+            embed.set_footer(text="Seiko Security • Système de tickets")
+
+            view = TicketManagementView(user.id, ticket_num)
+            await ticket_channel.send(embed=embed, view=view)
+
+            # Log
+            log_embed = discord.Embed(
+                title="🎟️ Ticket créé",
+                description=f"**Utilisateur** : {user.mention} (`{user}`)\n**Type** : {selected_option}\n**Ticket** : {ticket_channel.mention}",
+                color=0x00ff00,
+                timestamp=datetime.utcnow()
+            )
+            log_embed.set_thumbnail(url=user.display_avatar.url)
+            await send_log_to(bot, "ticket", log_embed)
+
+            await interaction.response.send_message(
+                f"✅ Ticket créé: {ticket_channel.mention}\n💬 Type: **{selected_option}**",
+                ephemeral=True
+            )
+            return
+
+        # Sinon afficher l'interface de choix
         embed = discord.Embed(
             title="🎟️ Créer un Ticket",
             description="Sélectionnez le type de ticket et cliquez sur 'Créer le Ticket'",
@@ -597,45 +685,40 @@ async def on_ready():
         bot.add_view(TicketControls(0))
         print("✅ Views ticket enregistrées")
         
-        # Démarrer le système anti-AFK
-        bot.loop.create_task(anti_afk_task())
+        # Démarrer la boucle de self-ping (anti-AFK via PING sur PUBLIC_URL)
+        try:
+            if not hasattr(bot, "self_ping_task") or bot.self_ping_task.done():
+                bot.self_ping_task = asyncio.create_task(self_ping_loop())
+                print("✅ Self-ping task démarrée")
+        except Exception as e:
+            print(f"❌ Impossible de démarrer self-ping task: {e}")
 
 
 # === SYSTÈME ANTI-AFK ===
-async def anti_afk_task():
-    """Task qui change le status du bot toutes les 5 minutes pour éviter l'AFK sur Render (limite 10 min)"""
-    import requests
-    
-    statuses = [
-        discord.Activity(type=discord.ActivityType.watching, name="Seiko Security | /help"),
-        discord.Activity(type=discord.ActivityType.watching, name="vos serveurs 👀"),
-        discord.Activity(type=discord.ActivityType.watching, name="/config pour démarrer"),
-        discord.Activity(type=discord.ActivityType.playing, name="🎮 Sécurité Mode"),
-        discord.Activity(type=discord.ActivityType.listening, name="les tickets 🎟️"),
-    ]
-    
-    index = 0
-    while True:
-        try:
-            # Attendre 5 minutes avant de changer le status (pour éviter AFK avant 10 min)
-            await asyncio.sleep(300)
-            
-            # Changer le status
-            activity = statuses[index % len(statuses)]
-            await bot.change_presence(activity=activity, status=discord.Status.online)
-            print(f"🔄 Changement de status: {activity.name if hasattr(activity, 'name') else 'Online'}")
-            
-            # Ping la route Flask pour maintenir l'activité
+PUBLIC_URL = os.environ.get("PUBLIC_URL", "https://seiko-security.onrender.com/")
+PING_INTERVAL = int(os.environ.get("PING_INTERVAL", 240))  # 240s = 4 minutes
+
+
+async def self_ping_loop():
+    await asyncio.sleep(10)  # laisse le bot démarrer proprement
+    session = aiohttp.ClientSession()
+    try:
+        while True:
             try:
-                port = int(os.environ.get("PORT", 8080))
-                requests.get(f"http://127.0.0.1:{port}/ping", timeout=2)
-            except Exception:
-                pass
-            
-            index += 1
-        except Exception as e:
-            print(f"❌ Erreur anti-AFK: {e}")
-            await asyncio.sleep(60)
+                async with session.get(PUBLIC_URL, timeout=10) as resp:
+                    status = resp.status
+                    try:
+                        text = await resp.text()
+                    except Exception:
+                        text = ""
+                    print(f"[SELF PING] {PUBLIC_URL} -> {status}")
+            except Exception as e:
+                print(f"[SELF PING] erreur: {e}")
+            await asyncio.sleep(PING_INTERVAL)
+    except CancelledError:
+        pass
+    finally:
+        await session.close()
 
 
 
@@ -1101,6 +1184,60 @@ async def ticket_panel(interaction: discord.Interaction):
     embed.set_footer(text="Seiko Security • Système sécurisé")
     await interaction.channel.send(embed=embed, view=TicketView())
     await interaction.response.send_message("✅ Pannel de tickets envoyé.", ephemeral=True)
+
+
+@bot.tree.command(name="add-user", description="Ajoute un utilisateur au ticket courant (par nom)" )
+@discord.app_commands.describe(nom="Nom ou pseudo de l'utilisateur à ajouter")
+@discord.app_commands.checks.has_permissions(manage_channels=True)
+async def add_user(interaction: discord.Interaction, nom: str):
+    guild = interaction.guild
+    channel = interaction.channel
+    if not channel.name.startswith("ticket-") and not channel.name.startswith("close-"):
+        await interaction.response.send_message("❌ Cette commande ne peut être utilisée que dans un ticket.", ephemeral=True)
+        return
+
+    # Chercher le membre par nom/affichage (insensible à la casse)
+    lname = nom.lower()
+    matches = [m for m in guild.members if lname in (m.display_name or "").lower() or lname in (m.name or "").lower()]
+    if not matches:
+        await interaction.response.send_message("🔍 Aucun membre trouvé pour ce nom.", ephemeral=True)
+        return
+    # Si plusieurs, privilégier exact
+    member = None
+    exact = [m for m in matches if (m.display_name or "").lower() == lname or (m.name or "").lower() == lname]
+    member = exact[0] if exact else matches[0]
+
+    try:
+        await channel.set_permissions(member, read_messages=True, send_messages=True, add_reactions=True, attach_files=False, embed_links=False)
+        await interaction.response.send_message(f"✅ {member.mention} ajouté au ticket.", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Erreur: {e}", ephemeral=True)
+
+
+@bot.tree.command(name="remove-user", description="Retire un utilisateur du ticket courant (par nom)" )
+@discord.app_commands.describe(nom="Nom ou pseudo de l'utilisateur à retirer")
+@discord.app_commands.checks.has_permissions(manage_channels=True)
+async def remove_user(interaction: discord.Interaction, nom: str):
+    guild = interaction.guild
+    channel = interaction.channel
+    if not channel.name.startswith("ticket-") and not channel.name.startswith("close-"):
+        await interaction.response.send_message("❌ Cette commande ne peut être utilisée que dans un ticket.", ephemeral=True)
+        return
+
+    lname = nom.lower()
+    matches = [m for m in guild.members if lname in (m.display_name or "").lower() or lname in (m.name or "").lower()]
+    if not matches:
+        await interaction.response.send_message("🔍 Aucun membre trouvé pour ce nom.", ephemeral=True)
+        return
+    exact = [m for m in matches if (m.display_name or "").lower() == lname or (m.name or "").lower() == lname]
+    member = exact[0] if exact else matches[0]
+
+    try:
+        # Retirer l'accès
+        await channel.set_permissions(member, read_messages=False, send_messages=False, add_reactions=False)
+        await interaction.response.send_message(f"✅ {member.mention} retiré du ticket.", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Erreur: {e}", ephemeral=True)
 
 
 # ============================
