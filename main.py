@@ -8,23 +8,37 @@ from threading import Thread
 from datetime import datetime
 import re
 import io
+import requests
 from utils.logging import send_log_to
 
 # === MINI SERVEUR WEB POUR RENDRE/KEEP ALIVE ===
 import os
+import time
 
 app = Flask("")
 
+# Variables globales pour le keep-alive amélioré
+last_activity = time.time()
+activity_counter = 0
+
 @app.route("/")
 def home():
+    global last_activity
+    last_activity = time.time()
     return "Bot Seiko Security en ligne ! 🚀"
+
+@app.route("/ping")
+def ping():
+    global last_activity
+    last_activity = time.time()
+    return {"status": "ok", "timestamp": time.time()}
 
 def run():
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
 
 # Lance le serveur Flask dans un thread séparé
-t = Thread(target=run)
+t = Thread(target=run, daemon=True)
 t.start()
 
 # === CONFIGURATION DU BOT DISCORD ===
@@ -138,6 +152,312 @@ class LogChannelSelectView(discord.ui.View):
         self.add_item(select)
 
 # === VIEWS POUR TICKETS ===
+class TicketChoiceSelect(discord.ui.Select):
+    """Select menu pour choisir le type de ticket"""
+    def __init__(self, guild: discord.Guild):
+        # Récupérer les options depuis CONFIG ou utiliser les defaults
+        options_list = config.CONFIG.get("ticket_config", {}).get("options", [])
+        if not options_list:
+            options_list = ["Support Général", "Bug Report", "Suggestion", "Autre"]
+        
+        select_options = [
+            discord.SelectOption(label=opt[:100], value=opt) 
+            for opt in options_list[:25]  # Limit Discord 25 options
+        ]
+        
+        super().__init__(
+            placeholder="Sélectionner le type de ticket...",
+            options=select_options,
+            min_values=1,
+            max_values=1
+        )
+        self.guild = guild
+    
+    async def callback(self, interaction: discord.Interaction):
+        # On va stocker le choix et afficher le bouton "Créer"
+        pass
+
+
+class TicketChoiceView(discord.ui.View):
+    """Interface pour choisir le type de ticket avant création"""
+    def __init__(self, guild: discord.Guild):
+        super().__init__(timeout=300)
+        self.guild = guild
+        self.selected_option = None
+        
+        # Ajouter le Select menu
+        select = TicketChoiceSelect(guild)
+        
+        # Override le callback pour stocker la sélection
+        async def select_callback(interaction: discord.Interaction):
+            self.selected_option = select.values[0]
+            await interaction.response.defer()
+        
+        select.callback = select_callback
+        self.add_item(select)
+    
+    @discord.ui.button(label="📩 Créer le Ticket", style=discord.ButtonStyle.success)
+    async def create_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.selected_option:
+            await interaction.response.send_message("❌ Sélectionnez un type de ticket d'abord.", ephemeral=True)
+            return
+        
+        guild = self.guild or interaction.guild
+        user = interaction.user
+        
+        # Vérifier qu'il n'a pas déjà un ticket
+        for channel in guild.channels:
+            if channel.name.startswith("ticket-") and str(user.id) in channel.name:
+                await interaction.response.send_message("Vous avez déjà un ticket ouvert !", ephemeral=True)
+                return
+        
+        # Incrémenter le counter
+        config.CONFIG.setdefault("ticket_config", {}).setdefault("counter", 0)
+        ticket_num = config.CONFIG["ticket_config"]["counter"] + 1
+        config.CONFIG["ticket_config"]["counter"] = ticket_num
+        
+        # Créer le channel ticket-XXXXXX
+        ticket_name = f"ticket-{str(ticket_num).zfill(6)}"
+        
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(read_messages=False),
+            user: discord.PermissionOverwrite(
+                read_messages=True, 
+                send_messages=True, 
+                attach_files=False, 
+                embed_links=False
+            ),
+            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True),
+        }
+        
+        try:
+            ticket_channel = await guild.create_text_channel(
+                name=ticket_name,
+                overwrites=overwrites,
+                reason=f"Ticket créé par {user} ({self.selected_option})"
+            )
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Erreur création ticket: {e}", ephemeral=True)
+            return
+        
+        # Envoyer le message du bot avec les boutons de gestion
+        embed = discord.Embed(
+            title=f"🎟️ {self.selected_option} - #{ticket_num:06d}",
+            description=f"Bonjour {user.mention},\n\n📝 Décrivez votre demande en détail. Un membre de l'équipe vous répondra bientôt.\n\n> ⚠️ Les fichiers et liens ne sont pas autorisés dans les tickets.",
+            color=0x5865F2,
+            timestamp=datetime.utcnow()
+        )
+        embed.set_footer(text="Seiko Security • Système de tickets")
+        
+        view = TicketManagementView(user.id, ticket_num)
+        msg = await ticket_channel.send(embed=embed, view=view)
+        
+        # Log
+        log_embed = discord.Embed(
+            title="🎟️ Ticket créé",
+            description=f"**Utilisateur** : {user.mention} (`{user}`)\n**Type** : {self.selected_option}\n**Ticket** : {ticket_channel.mention}",
+            color=0x00ff00,
+            timestamp=datetime.utcnow()
+        )
+        log_embed.set_thumbnail(url=user.display_avatar.url)
+        await send_log_to(bot, "ticket", log_embed)
+        
+        await interaction.response.send_message(
+            f"✅ Ticket créé: {ticket_channel.mention}\n💬 Type: **{self.selected_option}**",
+            ephemeral=True
+        )
+
+
+class TicketManagementView(discord.ui.View):
+    """Boutons de gestion du ticket (Claim, Close, Reopen, Delete)"""
+    def __init__(self, owner_id: int, ticket_num: int):
+        super().__init__(timeout=None)
+        self.owner_id = owner_id
+        self.ticket_num = ticket_num
+        self.is_closed = False
+    
+    @discord.ui.button(label="👤 Claim", style=discord.ButtonStyle.primary, emoji="✋")
+    async def claim(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Claim = Clear tous les messages sauf le premier du bot"""
+        if not any(role.permissions.administrator or role.permissions.manage_messages for role in interaction.user.roles):
+            await interaction.response.send_message("❌ Permissions insuffisantes.", ephemeral=True)
+            return
+        
+        await interaction.response.defer()
+        channel = interaction.channel
+        
+        # Récupérer tous les messages
+        messages_to_delete = []
+        first = True
+        async for msg in channel.history(limit=None, oldest_first=True):
+            if first and msg.author == interaction.client.user:
+                first = False
+                continue
+            messages_to_delete.append(msg)
+        
+        # Supprimer (par batch pour éviter rate limit)
+        deleted_count = 0
+        for msg in messages_to_delete:
+            try:
+                await msg.delete()
+                deleted_count += 1
+            except:
+                pass
+        
+        embed = discord.Embed(
+            title="✅ Ticket Claimed",
+            description=f"Par {interaction.user.mention}\n🗑️ {deleted_count} messages supprimés",
+            color=0x2ecc71
+        )
+        await interaction.followup.send(embed=embed)
+    
+    @discord.ui.button(label="🔒 Fermer", style=discord.ButtonStyle.danger, emoji="🔒")
+    async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Close = Disable permissions + rename"""
+        if not any(role.permissions.administrator or role.permissions.manage_messages for role in interaction.user.roles):
+            await interaction.response.send_message("❌ Permissions insuffisantes.", ephemeral=True)
+            return
+        
+        await interaction.response.defer()
+        channel = interaction.channel
+        self.is_closed = True
+        
+        # Récupérer le nombre de messages
+        msg_count = sum(1 async for _ in channel.history(limit=None))
+        
+        # Renommer en close-ticket-XXXXXX
+        old_name = channel.name
+        try:
+            await channel.edit(name=f"close-{old_name}")
+        except:
+            pass
+        
+        # Désactiver toutes les permissions d'envoi
+        for role in interaction.guild.roles:
+            if role != interaction.guild.default_role:
+                try:
+                    await channel.set_permissions(role, send_messages=False, add_reactions=False)
+                except:
+                    pass
+        
+        # Désactiver pour @everyone aussi
+        try:
+            await channel.set_permissions(
+                interaction.guild.default_role, 
+                send_messages=False, 
+                add_reactions=False,
+                embed_links=False
+            )
+        except:
+            pass
+        
+        # Désactiver le bouton Fermer, activer Réouvrir
+        button.disabled = True
+        close_btn = None
+        for btn in self.children:
+            if btn.label == "🔓 Réouvrir":
+                btn.disabled = False
+                break
+        
+        embed = discord.Embed(
+            title="🔒 Ticket Fermé",
+            description=f"Par {interaction.user.mention}\n💬 {msg_count} messages\n\n✨ Le ticket sera supprimé automatiquement.",
+            color=0xe74c3c
+        )
+        await interaction.followup.send(embed=embed)
+    
+    @discord.ui.button(label="🔓 Réouvrir", style=discord.ButtonStyle.success, emoji="🔓")
+    async def reopen_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Reopen = Restore permissions"""
+        if not any(role.permissions.administrator or role.permissions.manage_messages for role in interaction.user.roles):
+            await interaction.response.send_message("❌ Permissions insuffisantes.", ephemeral=True)
+            return
+        
+        await interaction.response.defer()
+        channel = interaction.channel
+        self.is_closed = False
+        
+        # Renommer back to ticket-XXXXXX
+        old_name = channel.name
+        if old_name.startswith("close-"):
+            new_name = old_name[6:]  # Remove "close-" prefix
+            try:
+                await channel.edit(name=new_name)
+            except:
+                pass
+        
+        # Rétablir les permissions
+        owner = interaction.guild.get_member(self.owner_id)
+        if owner:
+            try:
+                await channel.set_permissions(
+                    owner,
+                    read_messages=True,
+                    send_messages=True,
+                    add_reactions=True,
+                    attach_files=False,  # Always keep off
+                    embed_links=False     # Always keep off
+                )
+            except:
+                pass
+        
+        # Rétablir pour le staff
+        for role in interaction.guild.roles:
+            if role.permissions.administrator or role.permissions.manage_messages:
+                try:
+                    await channel.set_permissions(role, send_messages=True, add_reactions=True)
+                except:
+                    pass
+        
+        # Réactiver le bouton Fermer
+        for btn in self.children:
+            if btn.label == "🔒 Fermer":
+                btn.disabled = False
+            elif btn.label == "🔓 Réouvrir":
+                btn.disabled = True
+        
+        embed = discord.Embed(
+            title="🔓 Ticket Réouvert",
+            description=f"Par {interaction.user.mention}\n\nVous pouvez envoyer des messages à nouveau.",
+            color=0x2ecc71
+        )
+        await interaction.followup.send(embed=embed)
+    
+    @discord.ui.button(label="🗑️ Supprimer", style=discord.ButtonStyle.danger, emoji="❌")
+    async def delete_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Delete = Supprimer le canal avec confirmation"""
+        if not any(role.permissions.administrator or role.permissions.manage_messages for role in interaction.user.roles):
+            await interaction.response.send_message("❌ Permissions insuffisantes.", ephemeral=True)
+            return
+        
+        # Confirmation
+        embed = discord.Embed(
+            title="⚠️ Confirmer la suppression",
+            description="Ce ticket va être supprimé **définitivement** dans 5 secondes.\nCliquez sur ✅ pour confirmer ou ❌ pour annuler.",
+            color=0xe74c3c
+        )
+        
+        class ConfirmDeleteView(discord.ui.View):
+            def __init__(self, ticket_channel):
+                super().__init__(timeout=5)
+                self.ticket_channel = ticket_channel
+            
+            @discord.ui.button(label="Confirmer", style=discord.ButtonStyle.danger, emoji="✅")
+            async def confirm_delete(self, confirm_interaction: discord.Interaction, confirm_button: discord.ui.Button):
+                await confirm_interaction.response.defer()
+                try:
+                    await self.ticket_channel.delete()
+                except:
+                    pass
+            
+            @discord.ui.button(label="Annuler", style=discord.ButtonStyle.secondary, emoji="❌")
+            async def cancel_delete(self, cancel_interaction: discord.Interaction, cancel_button: discord.ui.Button):
+                await cancel_interaction.response.send_message("❌ Suppression annulée.", ephemeral=True)
+        
+        await interaction.response.send_message(embed=embed, view=ConfirmDeleteView(interaction.channel), ephemeral=True)
+
+
+# TicketView REFACTORISÉE - Utilise TicketChoiceView
 class TicketView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -146,163 +466,26 @@ class TicketView(discord.ui.View):
     async def create_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         guild = interaction.guild
         user = interaction.user
-
-        for channel in guild.channels:
-            if channel.name == f"ticket-{user.id}":
-                await interaction.response.send_message(
-                    "Vous avez déjà un ticket ouvert !", ephemeral=True
-                )
-                return
-
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=False, embed_links=False),
-            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True),
-        }
-
-        ticket_channel = await guild.create_text_channel(
-            name=f"ticket-{user.id}",
-            overwrites=overwrites,
-            reason=f"Ticket créé par {user} ({user.id})"
-        )
-
-        embed = discord.Embed(
-            title="📬 Nouveau ticket",
-            description=f"Bonjour {user.mention},\n\nUn membre de l'équipe vous répondra bientôt.\n\nCliquez sur **Prendre en charge** si vous êtes staff.",
-            color=0x5865F2,
-            timestamp=datetime.utcnow()
-        )
-        embed.set_footer(text="Seiko Security • Système de tickets")
-        view = TicketControls(user.id)
-        await ticket_channel.send(embed=embed, view=view)
-
-        log_embed = discord.Embed(
-            title="🎟️ Ticket créé",
-            description=f"**Utilisateur** : {user.mention} (`{user}`)\n**Salon** : {ticket_channel.mention}",
-            color=0x00ff00,
-            timestamp=datetime.utcnow()
-        )
-        log_embed.set_thumbnail(url=user.display_avatar.url)
-        await send_log_to(bot, "ticket", log_embed)
-
-        await interaction.response.send_message(f"✅ Votre ticket a été créé : {ticket_channel.mention}", ephemeral=True)
-
-
-class TicketControls(discord.ui.View):
-    def __init__(self, owner_id: int):
-        super().__init__(timeout=None)
-        self.owner_id = owner_id
-
-    @discord.ui.button(label="🔧 Prendre en charge", style=discord.ButtonStyle.primary, custom_id="claim_ticket")
-    async def claim_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not any(role.permissions.administrator or role.permissions.manage_messages for role in interaction.user.roles):
-            await interaction.response.send_message("❌ Vous n'avez pas la permission de prendre en charge ce ticket.", ephemeral=True)
-            return
-
-        button.disabled = True
-        button.style = discord.ButtonStyle.secondary
-        button.label = "✅ Pris en charge"
-
-        embed = discord.Embed(
-            description=f"✅ Ce ticket est maintenant pris en charge par {interaction.user.mention}.",
-            color=0x00ff00
-        )
-        await interaction.channel.send(embed=embed)
-
-        log_embed = discord.Embed(
-            title="🔧 Ticket pris en charge",
-            description=f"**Staff** : {interaction.user.mention}\n**Ticket** : {interaction.channel.mention}",
-            color=0x00aaff,
-            timestamp=datetime.utcnow()
-        )
-        await send_log_to(bot, "ticket", log_embed)
-
-        await interaction.response.edit_message(view=self)
-
-    @discord.ui.button(label="🔒 Fermer", style=discord.ButtonStyle.danger, custom_id="close_ticket")
-    async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.owner_id and not any(role.permissions.administrator for role in interaction.user.roles):
-            await interaction.response.send_message("❌ Seul le propriétaire du ticket ou un admin peut le fermer.", ephemeral=True)
-            return
-
-        await interaction.response.defer(ephemeral=True)
         
-        # === CAPTURE TOUS LES MESSAGES ===
-        messages_history = []
-        try:
-            async for message in interaction.channel.history(limit=None, oldest_first=True):
-                msg_data = {
-                    "author": str(message.author),
-                    "timestamp": message.created_at.strftime("%d/%m/%Y %H:%M:%S"),
-                    "content": message.content or "(pas de texte)",
-                    "attachments": [att.url for att in message.attachments] if message.attachments else [],
-                }
-                messages_history.append(msg_data)
-        except Exception as e:
-            print(f"❌ Erreur lors de la capture des messages : {e}")
-
-        # === RÉSUMÉ ===
-        if messages_history:
-            log_content = f"📋 **RÉSUMÉ DU TICKET** - {interaction.channel.name}\n"
-            log_content += f"**Ouvert par** : {messages_history[0]['author']}\n"
-            log_content += f"**Fermé par** : {interaction.user}\n"
-            log_content += f"**Date de fermeture** : {datetime.utcnow().strftime('%d/%m/%Y %H:%M:%S')}\n"
-            log_content += f"**Nombre de messages** : {len(messages_history)}\n\n"
-            log_content += "="*50 + "\n\n"
-            
-            for msg in messages_history:
-                log_content += f"**{msg['author']}** [{msg['timestamp']}]\n"
-                log_content += f"{msg['content']}\n"
-                if msg['attachments']:
-                    log_content += f"📎 *Pièces jointes* : {', '.join(msg['attachments'])}\n"
-                log_content += "\n"
-
-            if len(log_content) > 2000:
-                log_file = io.BytesIO(log_content.encode('utf-8'))
-                file = discord.File(log_file, filename=f"ticket_{interaction.channel.name}.txt")
-                
-                ticket_logs_channel_id = config.CONFIG.get("logs", {}).get("ticket")
-                if ticket_logs_channel_id:
-                    ticket_channel = bot.get_channel(ticket_logs_channel_id)
-                    if ticket_channel:
-                        embed = discord.Embed(
-                            title="📋 Logs complets du ticket",
-                            description=f"**Ticket** : {interaction.channel.name}\n**Fermé par** : {interaction.user.mention}\n**Messages** : {len(messages_history)}",
-                            color=0x2f3136,
-                            timestamp=datetime.utcnow()
-                        )
-                        embed.set_footer(text="Seiko Security • Logs de ticket")
-                        await ticket_channel.send(embed=embed, file=file)
-            else:
-                ticket_logs_channel_id = config.CONFIG.get("logs", {}).get("ticket")
-                if ticket_logs_channel_id:
-                    ticket_channel = bot.get_channel(ticket_logs_channel_id)
-                    if ticket_channel:
-                        chunks = [log_content[i:i+2000] for i in range(0, len(log_content), 2000)]
-                        for i, chunk in enumerate(chunks):
-                            if i == 0:
-                                embed = discord.Embed(
-                                    title="📋 Logs complets du ticket",
-                                    description=chunk,
-                                    color=0x2f3136,
-                                    timestamp=datetime.utcnow()
-                                )
-                            else:
-                                embed = discord.Embed(
-                                    description=chunk,
-                                    color=0x2f3136
-                                )
-                            await ticket_channel.send(embed=embed)
-
-        log_embed = discord.Embed(
-            title="🔒 Ticket fermé",
-            description=f"**Fermé par** : {interaction.user.mention}\n**Ticket** : `{interaction.channel.name}`\n**Messages** : {len(messages_history)}",
-            color=0xff0000,
-            timestamp=datetime.utcnow()
+        # Vérifier qu'il n'a pas déjà un ticket
+        for channel in guild.channels:
+            if channel.name.startswith("ticket-") and str(user.id) in channel.name:
+                await interaction.response.send_message("Vous avez déjà un ticket ouvert !", ephemeral=True)
+                return
+        
+        # Afficher l'interface de choix
+        embed = discord.Embed(
+            title="🎟️ Créer un Ticket",
+            description="Sélectionnez le type de ticket et cliquez sur 'Créer le Ticket'",
+            color=0x5865F2
         )
-        await send_log_to(bot, "ticket", log_embed)
+        await interaction.response.send_message(embed=embed, view=TicketChoiceView(guild), ephemeral=True)
 
-        await interaction.channel.delete(reason=f"Ticket fermé par {interaction.user} ({interaction.user.id})")
+
+# TicketControls est maintenant un alias pour TicketManagementView (compatibilité)
+class TicketControls(TicketManagementView):
+    """Classe de compatibilité - anciennement gérait les tickets"""
+    pass
 
 
 # === EVENT: on_ready ===
@@ -351,6 +534,45 @@ async def on_ready():
         bot.add_view(TicketView())
         bot.add_view(TicketControls(0))
         print("✅ Views ticket enregistrées")
+        
+        # Démarrer le système anti-AFK
+        bot.loop.create_task(anti_afk_task())
+
+
+# === SYSTÈME ANTI-AFK ===
+async def anti_afk_task():
+    """Task qui change le status du bot toutes les 5 minutes pour éviter l'AFK sur Render (limite 10 min)"""
+    import requests
+    
+    statuses = [
+        discord.Activity(type=discord.ActivityType.watching, name="Seiko Security | /help"),
+        discord.Activity(type=discord.ActivityType.watching, name="vos serveurs 👀"),
+        discord.Activity(type=discord.ActivityType.watching, name="/config pour démarrer"),
+        discord.Activity(type=discord.ActivityType.playing, name="🎮 Sécurité Mode"),
+        discord.Activity(type=discord.ActivityType.listening, name="les tickets 🎟️"),
+    ]
+    
+    index = 0
+    while True:
+        try:
+            # Attendre 4 minutes avant de changer le status (pour éviter AFK avant 10 min)
+            await asyncio.sleep(240)
+            
+            # Changer le status
+            activity = statuses[index % len(statuses)]
+            await bot.change_presence(activity=activity, status=discord.Status.online)
+            print(f"🔄 Changement de status: {activity.name if hasattr(activity, 'name') else 'Online'}")
+            
+            # Ping la route Flask pour maintenir l'activité
+            try:
+                requests.get("http://localhost:8080/ping", timeout=2)
+            except:
+                pass
+            
+            index += 1
+        except Exception as e:
+            print(f"❌ Erreur anti-AFK: {e}")
+            await asyncio.sleep(60)
 
 
 
@@ -663,9 +885,131 @@ async def anti_hack(interaction: discord.Interaction, actif: bool):
     await interaction.response.send_message(f"✅ Anti-hack {'activé' if actif else 'désactivé'}.", ephemeral=True)
 
 
+# Commande utilitaire pour forcer la synchronisation des commandes sur le serveur courant
+@bot.tree.command(name="sync", description="(Admin) Synchronise les commandes pour ce serveur")
+@discord.app_commands.checks.has_permissions(administrator=True)
+async def sync_commands(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+    guild = interaction.guild
+    try:
+        if guild:
+            # Copier les commandes globales vers le guild et synchroniser
+            bot.tree.copy_global_to(guild=discord.Object(id=guild.id))
+            synced = await bot.tree.sync(guild=discord.Object(id=guild.id))
+            await interaction.followup.send(f"✅ {len(synced)} commandes synchronisées pour ce serveur.", ephemeral=True)
+        else:
+            synced = await bot.tree.sync()
+            await interaction.followup.send(f"✅ {len(synced)} commandes globales synchronisées.", ephemeral=True)
+    except Exception as e:
+        await interaction.followup.send(f"❌ Échec de la sync: {e}", ephemeral=True)
+
+
 # ============================
 # === COMMANDES DE TICKETS ===
 # ============================
+
+@bot.tree.command(name="ticket-config", description="Configurer le système de tickets")
+@discord.app_commands.checks.has_permissions(administrator=True)
+async def ticket_config(interaction: discord.Interaction):
+    """Configurer le mode de tickets (basic/advanced) et les options personnalisées"""
+    await interaction.response.defer(ephemeral=True)
+    
+    embed = discord.Embed(
+        title="🎟️ Configuration Tickets",
+        description="Choisissez le mode de fonctionnement",
+        color=0x5865F2
+    )
+    await interaction.followup.send(embed=embed, view=TicketConfigView(), ephemeral=True)
+
+
+class TicketConfigView(discord.ui.View):
+    """Interface de configuration du mode tickets"""
+    def __init__(self):
+        super().__init__(timeout=600)
+    
+    @discord.ui.button(label="Basic Mode", style=discord.ButtonStyle.primary, emoji="⚙️")
+    async def basic_mode(self, interaction: discord.Interaction, button: discord.ui.Button):
+        config.CONFIG["ticket_config"]["mode"] = "basic"
+        config.CONFIG["ticket_config"]["options"] = [
+            "Support Général",
+            "Bug Report",
+            "Suggestion",
+            "Autre"
+        ]
+        embed = discord.Embed(
+            title="✅ Mode Basic Activé",
+            description="Options par défaut:\n• Support Général\n• Bug Report\n• Suggestion\n• Autre",
+            color=0x2ecc71
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    
+    @discord.ui.button(label="Advanced Mode", style=discord.ButtonStyle.success, emoji="✨")
+    async def advanced_mode(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="✨ Mode Advanced",
+            description="Vous allez créer vos propres options.\n\nEnvoyez le texte pour la première option (ex: 'Bug Report')",
+            color=0x5865F2
+        )
+        
+        class OptionsModal(discord.ui.Modal, title="Nouvelle option de ticket"):
+            option_input = discord.ui.TextInput(label="Option (100 max chars)", placeholder="Bug Report", max_length=100)
+            
+            async def on_submit(self, modal_interaction: discord.Interaction):
+                option_text = self.option_input.value.strip()
+                config.CONFIG["ticket_config"]["mode"] = "advanced"
+                config.CONFIG["ticket_config"]["options"] = [option_text]
+                
+                # Demander si ajouter d'autres options
+                class AddMoreView(discord.ui.View):
+                    def __init__(self):
+                        super().__init__(timeout=300)
+                    
+                    @discord.ui.button(label="Ajouter une autre option", style=discord.ButtonStyle.success)
+                    async def add_more(self, add_interaction: discord.Interaction, add_button: discord.ui.Button):
+                        class AddOptionModal(discord.ui.Modal, title="Ajouter une option"):
+                            new_option = discord.ui.TextInput(label="Nouvelle option", placeholder="Support", max_length=100)
+                            
+                            async def on_submit(self, add_modal_interaction: discord.Interaction):
+                                new_opt = self.new_option.value.strip()
+                                config.CONFIG["ticket_config"]["options"].append(new_opt)
+                                
+                                # Demander encore?
+                                embed_again = discord.Embed(
+                                    title="✅ Option Ajoutée",
+                                    description=f"'{new_opt}' a été ajoutée.\n\nVoulez-vous ajouter une autre option?",
+                                    color=0x2ecc71
+                                )
+                                await add_modal_interaction.response.send_message(
+                                    embed=embed_again, 
+                                    view=AddMoreView(), 
+                                    ephemeral=True
+                                )
+                        
+                        await add_interaction.response.send_modal(AddOptionModal())
+                    
+                    @discord.ui.button(label="Finir la configuration", style=discord.ButtonStyle.secondary)
+                    async def finish(self, finish_interaction: discord.Interaction, finish_button: discord.ui.Button):
+                        options_str = "\n".join(f"• {opt}" for opt in config.CONFIG["ticket_config"]["options"])
+                        embed_done = discord.Embed(
+                            title="✅ Configuration Terminée",
+                            description=f"**Mode**: Advanced\n**Options**:\n{options_str}",
+                            color=0x2ecc71
+                        )
+                        await finish_interaction.response.send_message(embed=embed_done, ephemeral=True)
+                
+                embed_first = discord.Embed(
+                    title="✅ Option Créée",
+                    description=f"'{option_text}' a été ajoutée comme première option.\n\nVoulez-vous ajouter d'autres options?",
+                    color=0x2ecc71
+                )
+                await modal_interaction.response.send_message(
+                    embed=embed_first,
+                    view=AddMoreView(),
+                    ephemeral=True
+                )
+        
+        await interaction.response.send_modal(OptionsModal())
+
 
 @bot.tree.command(name="ticket-panel", description="Envoie le panneau de création de ticket")
 @discord.app_commands.checks.has_permissions(administrator=True)
@@ -947,82 +1291,87 @@ async def salon_links(interaction: discord.Interaction, actif: bool):
 # ============================
 
 class SetupStep1View(discord.ui.View):
-    """Étape 1: Rôles à l'arrivée"""
-    def __init__(self):
+    """Étape 1: Rôle Admin"""
+    def __init__(self, guild: discord.Guild):
         super().__init__(timeout=600)
+        self.guild = guild
 
-    @discord.ui.button(label="➡️ Suivant", style=discord.ButtonStyle.success)
-    async def next_step(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="👑 Sélectionner Rôle Admin", style=discord.ButtonStyle.primary)
+    async def select_admin(self, interaction: discord.Interaction, button: discord.ui.Button):
         embed = discord.Embed(
-            title="🎓 Setup Seiko - Étape 2/5",
-            description="**Quel est le rôle ADMIN ?**\n\nMentionnez le rôle (ex: @Admin)",
+            title="🎓 Setup Seiko - Rôle Admin",
+            description="Choisissez le rôle admin dans la liste",
             color=0x3498db
         )
-        await interaction.response.edit_message(embed=embed, view=SetupStep2View())
+        await interaction.response.edit_message(embed=embed, view=RoleSelectView(self.guild, "admin"))
 
 
 class SetupStep2View(discord.ui.View):
-    """Étape 2: Rôle Admin"""
-    def __init__(self):
+    """Étape 2: Rôle Modérateur"""
+    def __init__(self, guild: discord.Guild):
         super().__init__(timeout=600)
+        self.guild = guild
 
-    @discord.ui.button(label="➡️ Suivant", style=discord.ButtonStyle.success)
-    async def next_step(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="🛡️ Sélectionner Rôle Modérateur", style=discord.ButtonStyle.primary)
+    async def select_mod(self, interaction: discord.Interaction, button: discord.ui.Button):
         embed = discord.Embed(
-            title="🎓 Setup Seiko - Étape 3/5",
-            description="**Quel est le rôle MODÉRATEUR ?**\n\nMentionnez le rôle (ex: @Modérateur)",
+            title="🎓 Setup Seiko - Rôle Modérateur",
+            description="Choisissez le rôle modérateur dans la liste",
             color=0x3498db
         )
-        await interaction.response.edit_message(embed=embed, view=SetupStep3View())
+        await interaction.response.edit_message(embed=embed, view=RoleSelectView(self.guild, "moderator"))
 
 
 class SetupStep3View(discord.ui.View):
-    """Étape 3: Rôle Modérateur"""
-    def __init__(self):
+    """Étape 3: Rôle Fondateur"""
+    def __init__(self, guild: discord.Guild):
         super().__init__(timeout=600)
+        self.guild = guild
 
-    @discord.ui.button(label="➡️ Suivant", style=discord.ButtonStyle.success)
-    async def next_step(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="🎯 Sélectionner Rôle Fondateur", style=discord.ButtonStyle.primary)
+    async def select_founder(self, interaction: discord.Interaction, button: discord.ui.Button):
         embed = discord.Embed(
-            title="🎓 Setup Seiko - Étape 4/5",
-            description="**Quel est le rôle FONDATEUR ?**\n\nMentionnez le rôle (ex: @Fondateur)",
+            title="🎓 Setup Seiko - Rôle Fondateur",
+            description="Choisissez le rôle fondateur dans la liste",
             color=0x3498db
         )
-        await interaction.response.edit_message(embed=embed, view=SetupStep4View())
+        await interaction.response.edit_message(embed=embed, view=RoleSelectView(self.guild, "founder"))
 
 
 class SetupStep4View(discord.ui.View):
-    """Étape 4: Rôle Fondateur"""
-    def __init__(self):
+    """Étape 4: Salon Bienvenue"""
+    def __init__(self, guild: discord.Guild):
         super().__init__(timeout=600)
+        self.guild = guild
 
-    @discord.ui.button(label="➡️ Suivant", style=discord.ButtonStyle.success)
-    async def next_step(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="💬 Sélectionner Salon Bienvenue", style=discord.ButtonStyle.success)
+    async def select_welcome(self, interaction: discord.Interaction, button: discord.ui.Button):
         embed = discord.Embed(
-            title="🎓 Setup Seiko - Étape 5/5",
-            description="**Salons Bienvenue & Adieu**\n\nSélectionnez les salons pour les messages d'arrivée/départ",
+            title="🎓 Setup Seiko - Salon Bienvenue",
+            description="Choisissez le salon bienvenue dans la liste",
             color=0x3498db
         )
-        await interaction.response.edit_message(embed=embed, view=SetupStep5View())
+        await interaction.response.edit_message(embed=embed, view=ChannelSelectView(self.guild, "welcome"))
 
 
 class SetupStep5View(discord.ui.View):
-    """Étape 5: Salons Bienvenue/Adieu"""
-    def __init__(self):
+    """Étape 5: Salon Adieu"""
+    def __init__(self, guild: discord.Guild):
         super().__init__(timeout=600)
+        self.guild = guild
 
-    @discord.ui.button(label="✅ Finaliser", style=discord.ButtonStyle.success)
-    async def finish(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="👋 Sélectionner Salon Adieu", style=discord.ButtonStyle.danger)
+    async def select_leave(self, interaction: discord.Interaction, button: discord.ui.Button):
         embed = discord.Embed(
-            title="🎓 Setup Seiko - Étape 6/6",
-            description="**Configuration des Logs**\n\nVoulez-vous créer automatiquement les salons de logs ?",
+            title="🎓 Setup Seiko - Salon Adieu",
+            description="Choisissez le salon adieu dans la liste",
             color=0x3498db
         )
-        await interaction.response.edit_message(embed=embed, view=SetupFinishView())
+        await interaction.response.edit_message(embed=embed, view=ChannelSelectView(self.guild, "leave"))
 
 
 class SetupFinishView(discord.ui.View):
-    """Finalisation: Logs automatiques"""
+    """Étape Finale: Créer les logs automatiquement"""
     def __init__(self):
         super().__init__(timeout=600)
 

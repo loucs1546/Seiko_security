@@ -22,6 +22,10 @@ CONFIG: Dict[str, Any] = {
         "securite": None,
         "bavures": None,
         "bavures-sanctions": None
+    },
+    "ticket_config": {
+        "mode": "basic",  # "basic" ou "advanced"
+        "options": []  # List[str] - options de tickets personnalisées en mode advanced
     }
 }
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
