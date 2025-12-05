@@ -5,8 +5,6 @@
 ║                                                                        ║
 ╚════════════════════════════════════════════════════════════════════════╝
 
-Salut! Tout est fait. Voici un résumé de ce qui a été fait:
-
 
 🎯 COMMANDES AJOUTÉES/MODIFIÉES:
 
@@ -146,7 +144,3 @@ Le bot est maintenant complet avec:
 • Documentation exhaustive
 
 ════════════════════════════════════════════════════════════════════════
-
-Pour questions, consultez GUIDE_COMPLET.md
-
-Bon déploiement! 🚀
