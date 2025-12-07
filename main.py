@@ -1105,8 +1105,9 @@ class TicketConfigView(discord.ui.View):
             color=0x2ecc71
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
-        # Si appelé depuis /start, envoyer POUR_TOI.txt
-        await self._send_guide_if_needed()
+        # L'envoi du guide peut rester ici car il ne dépend pas de l'interaction
+        # mais il ne doit PAS retarder la réponse
+        asyncio.create_task(self._send_guide_if_needed())
     
     @discord.ui.button(label="Advanced Mode", style=discord.ButtonStyle.success, emoji="✨")
     async def advanced_mode(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1163,12 +1164,15 @@ class TicketConfigView(discord.ui.View):
                             color=0x2ecc71
                         )
                         await finish_interaction.response.send_message(embed=embed_done, ephemeral=True)
-                        # Si appelé depuis /start, envoyer POUR_TOI.txt
                         if source_ch:
+                            asyncio.create_task(self._send_guide_in_channel(source_ch))
+
+                        # Ajoute cette méthode utilitaire dans TicketConfigView
+                        async def _send_guide_in_channel(self, channel: discord.TextChannel):
                             try:
                                 file_path = Path('POUR_TOI.txt')
                                 if file_path.exists():
-                                    await source_ch.send(file=discord.File(str(file_path), filename='POUR_TOI.txt'))
+                                    await channel.send(file=discord.File(str(file_path), filename='POUR_TOI.txt'))
                             except Exception as e:
                                 print(f"[TicketConfig] Erreur envoi POUR_TOI.txt: {e}")
                 
